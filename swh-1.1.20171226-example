@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="1.0.20171001"
+SWH_VER="1.1.20171226"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -8,46 +8,48 @@ SWH_VER="1.0.20171001"
 # You should see a trademark symbol here [™]
 
 # Simple Wine Helper (SWH)
-#   This shell script help you configure, create and use your own wine binary repository and wineprefix.
-# Features:
-# - work with distro package manager and winehq/wine-staging repository: create your own wine binary package repository
-# - help you create and use wineprefix with your specified wine version, from your own wine binary package repository
-# - work with winetricks: ablility to modify various wine settings
-# - multiple command-line operation: store wine to your own repositoy, create wineprefix, run winecfg, run wine regedit, run winetricks, launch application
-# - write with shell script, easy to modify and reuse
+#    Command-line interface warpper for wine
+#        Manage wine binary reopsitory
+#        Manage wineprefix cluster
+#        Work with distro package manager
+#        Work with winehq repository binary package or your own build
+#        Work with winetricks
+#        Integrated application configuration
+#        Write with shell script
 #
-#   Copyright (C) 2017 佟大维 <tim110011!163.com>
+#    Copyright (C) 2017 佟大维 <tim110011!163.com>
 #
-# License:
-#   This program is free software; you can redistribute it and/or
-#   modify it under the terms of the GNU Lesser General Public
-#   License as published by the Free Software Foundation; either
-#   version 2.1 of the License, or (at your option) any later
-#   version.
+#    License:
+#        This program is free software; you can redistribute it and/or
+#        modify it under the terms of the GNU Lesser General Public
+#        License as published by the Free Software Foundation; either
+#        version 2.1 of the License, or (at your option) any later
+#        version.
 #
-#   This program is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU Lesser General Public License for more details.
+#        This program is distributed in the hope that it will be useful,
+#        but WITHOUT ANY WARRANTY; without even the implied warranty of
+#        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#        GNU Lesser General Public License for more details.
 #
-#   You should have received a copy of the GNU Lesser General Public
-#   License along with this program.  If not, see
-#   <https://www.gnu.org/licenses/>.
+#        You should have received a copy of the GNU Lesser General Public
+#        License along with this program.  If not, see
+#        <https://www.gnu.org/licenses/>.
 
-app_config()  # application config, modify me!
+app_config()  # application config, MODIFY ME!
 {
-    # ( Example Application Description )
-    # Recommended dll override: xact (swh -w xact)
+    # application Description
+    # install guide: dll override, registry work, etc
 
-    export prefix="example_prefix"
-    export working_version="2.18"
-    #export LC_ALL=zh_CN.utf8        # for non-unicode program
+    export prefix="swh_test"
+    export working_version="3.0-rc2" 		# remember check SWH_FACTORY in swh_config()
+    export WINEARCH=win64 			# win32 or win64
+    #export LC_ALL=zh_CN.utf8 			# for non-unicode program, see 'locale -a' command
 
-    export app1dir="C:\example"
-    export app1name="app.exe"
+    export app1dir="C:\abc"
+    export app1name="xyz.exe"
     #export app1_args=""
 
-    #export app2dir=""
+    #export app2dir="$app1dir"
     #export app2name=""
     #export app2_args=""
 
@@ -68,14 +70,13 @@ app_regsetup() # leave for application registry work
     :
 }
 
-swh_config()  # swh config, modify me!
+swh_config()  # swh config, CHECK ME!
 {
-    export swh_factory="/opt/wine-devel"      #use wine development
-    #export swh_factory="/opt/wine-staging"   #use wine staging
-    export swh_cellar="$HOME/_wine_cellar"    #store wine here
-    export swh_table="$HOME/_wine"            #wineprefix dirs cluster
-    export WINEARCH=win64
-    export WINEDEBUG=fixme-all
+    export swh_factory="/opt/wine-devel" 	#use wine development
+    #export swh_factory="/opt/wine-staging" 	#use wine staging
+    export swh_cellar="$HOME/_wine_cellar" 	#store wine here
+    export swh_table="$HOME/_wine" 		#wineprefix dirs cluster
+    #export WINEDEBUG=fixme-all
     export WINEDLLOVERRIDES=winemenubuilder.exe=d    #swh default setting
 }
 
@@ -92,24 +93,19 @@ swh_error()
 
 swh_storewine()
 {
-    if ! [ -x "$swh_factory/bin/wineserver" ] ; then
-        echo "swh_factory=$swh_factory"
-        swh_error "wineserver in \$swh_factory/bin: missing or not executable. install winehq or check setting in swh_config()"
-    fi
-
     if ! [ -x "$swh_factory/bin/wine" ] ; then
         echo "swh_factory=$swh_factory"
         swh_error "wineloader in \$swh_factory/bin: missing or not executable. install winehq or check setting in swh_config()"
     fi
         factory_version=$(wine --version | tr [:upper:] [:lower:] | cut -d - -f 2- | tr -d "()" | tr " " "-")
     swh_pinfo "\$factory_version=$factory_version"
-    if [ -f "$swh_cellar/$factory_version/bin/wine" ] ; then
-        swh_pinfo "$swh_cellar/$factory_version exists, nothing to do."
+    if [ -f "$swh_cellar/$WINEARCH/$factory_version/bin/wine" ] ; then
+        swh_pinfo "$swh_cellar/$WINEARCH/$factory_version exists, nothing to do."
     else
-        if ! (mkdir -p "$swh_cellar/$factory_version"); then
+        if ! (mkdir -p "$swh_cellar/$WINEARCH/$factory_version"); then
             swh_error "swh_storewine(): mkdir error"
         fi
-        if ! (cp -r "$swh_factory"/* "$swh_cellar/$factory_version"); then
+        if ! (cp -r "$swh_factory"/* "$swh_cellar/$WINEARCH/$factory_version"); then
             swh_error "swh_storewine(): cp error"
         fi
     fi
@@ -117,23 +113,23 @@ swh_storewine()
 
 swh_diag()
 {
-    echo 'WINEVERPATH=$swh_cellar/$working_version'
-    echo "WINEVERPATH=$swh_cellar/$working_version"
+    echo 'WINEVERPATH=$swh_cellar/$WINEARCH/$working_version'
+    echo "WINEVERPATH=$swh_cellar/$WINEARCH/$working_version"
     echo 'WINEPREFIX=$swh_table/$WINEARCH/$working_version/$prefix'
     echo "WINEPREFIX=$swh_table/$WINEARCH/$working_version/$prefix"
 }
 
 swh_init()
 {
-    if ! [ -d "$swh_cellar/$working_version" ] ; then
+    if ! [ -d "$swh_cellar/$WINEARCH/$working_version" ] ; then
         swh_diag
-        swh_error "swh_init(): wine-$working_version not exist, store wine to your own repository directory before use. try ./$(basename $0) -s"
+        swh_error "swh_init(): $swh_cellar/$WINEARCH/$working_version not exist, store wine to your own repository directory before use. try ./$(basename $0) -s"
     fi
     export WINEPREFIX="$swh_table/$WINEARCH/$working_version/$prefix"
     if ! [ -d "$WINEPREFIX" ]; then
         mkdir -p "$WINEPREFIX"
     fi
-    export WINEVERPATH="$swh_cellar/$working_version"
+    export WINEVERPATH="$swh_cellar/$WINEARCH/$working_version"
     export PATH="$WINEVERPATH/bin:$PATH"
     export WINESERVER="$WINEVERPATH/bin/wineserver"
     export WINELOADER="$WINEVERPATH/bin/wine"
@@ -147,42 +143,14 @@ swh_checkwine()
         swh_diag
         swh_error "swh_checkwine(): wineprefix dir not exist or is empty, explicit create it. try ./$(basename $0) -c"
     fi
-    if ! [ -d "$WINEVERPATH/bin" ] ; then
-        swh_diag
-        swh_error "\$WINEVERPATH/bin missing."
-    fi
-    if ! [ -x "$WINEVERPATH/bin/wineserver" ] ; then
-        swh_diag
-        swh_error "wineserver in \$WINEVERPATH/bin: missing or not executable."
-    fi
-
     if ! [ -x "$WINEVERPATH/bin/wine" ] ; then
         swh_diag
         swh_error "wineloader in \$WINEVERPATH/bin:missing or not executable."
-    fi
-    if ! [ -d "$WINEVERPATH/lib" ] ; then
-        swh_diag
-        swh_error "\$WINEVERPATH/lib missing."
     fi
 }
 
 swh_regsetup()
 {
-    # disable winemenubuilder.exe ## not work as expect: wine still complain missing/err winemenubuilder
-    #rq=$(wine reg query "HKEY_CURRENT_USER\Software\Wine\DllOverrides" /v winemenubuilder.exe)
-    #rqv=$(echo ${rq//[[:blank:]*[:cntrl:]*]/-} | awk '{ gsub(/[-]+/, "\t"); print }' | cut -f 5)
-    #if ! [[ X"$rqv" == X"" ]]; then
-    #    if (wine reg add "HKEY_CURRENT_USER\Software\Wine\DllOverrides" /v winemenubuilder.exe); then
-    #        swh_pinfo "winemenubuilder.exe disabled."
-    #    else
-    #        swh_error "swh_regsetup(): Disable winemenubuilder.exe error."
-    #    fi
-    #else
-    #    swh_pinfo "winemenubuilder.exe already disabled, nothing to do."
-    #fi
-    #unset rq
-    #unset rqv
-    
     # disable GUI crash dialog
     rq=$(wine reg query "HKEY_CURRENT_USER\Software\Wine\WineDbg" /v ShowCrashDialog)
     rqv=$(echo ${rq//[[:blank:]*[:cntrl:]*]/-} | awk '{ gsub(/[-]+/, "\t"); print }' | cut -f 5)
@@ -219,9 +187,8 @@ load_d3dcompiler_42()
     helper_directx_Jun2010
 
     w_try_cabextract -d "$W_TMP" -L -F "*$dllname*x86*" "$W_CACHE"/directx9/$DIRECTX_NAME
-    for x in "$W_TMP"/*.cab
-    do
-      w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F "$dllname.dll" "$x"
+    for x in "$W_TMP"/*.cab; do
+        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F "$dllname.dll" "$x"
     done
     if test "$W_ARCH" = "win64"; then
         w_try_cabextract -d "$W_TMP" -L -F "*$dllname*x64*" "$W_CACHE"/directx9/$DIRECTX_NAME
@@ -292,7 +259,7 @@ _SWH_HELP_EOF_
 
 app_menu()  # menu function, modify me (optional)
 {
-        cat << APP_MENU_EOF_
+    cat << APP_MENU_EOF_
 
 Simple Wine Helper - SWH "$SWH_VER"
 
