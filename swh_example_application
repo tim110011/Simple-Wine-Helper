@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="1.3.20180121.2"
+SWH_VER="1.3.20180322.1"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -8,7 +8,7 @@ SWH_VER="1.3.20180121.2"
 # You should see a trademark symbol here [™]
 
 # Simple Wine Helper (SWH)
-#    Command-line interface warpper for wine
+#    Command-line interface wrapper for wine
 #        Manage wine binary reopsitory
 #        Manage wineprefix cluster
 #        Work with distro package manager
@@ -41,7 +41,7 @@ app_config()  # application config, MODIFY ME!
     # install guide: dll override, registry work, etc
 
     export prefix="swh_your_application_name"
-    export working_version="3.0" 		# remember check SWH_FACTORY in swh_config()
+    export working_version="3.3" 		# remember check SWH_FACTORY in swh_config()
     export WINEARCH=win64 				# win32 or win64
     #export LC_ALL=zh_CN.utf8 			# for non-unicode program, see 'locale -a' command
 
@@ -61,14 +61,14 @@ app_regsetup() # leave for application registry work
 
 swh_config()  # swh config, CHECK ME!
 {
-    export swh_factory="/opt/wine-stable" 		#use winehq stable
-    #export swh_factory="/opt/wine-devel" 		#use winehq development
+    #export swh_factory="/opt/wine-stable" 		#use winehq stable
+    export swh_factory="/opt/wine-devel" 		#use winehq development
     #export swh_factory="/opt/wine-staging" 	#use winehq staging
     #export swh_factory="WINE_BUILD_DIR" 		#you build wine yourself
     export swh_cellar="$HOME/_wine_cellar" 		#store wine here
     export swh_table="$HOME/_wine" 				#wineprefix dirs cluster
     #export WINEDEBUG=fixme-all
-    export WINEDLLOVERRIDES=winemenubuilder.exe=d    #swh default setting
+    export WINEDLLOVERRIDES=winemenubuilder.exe=d 	#swh default setting
 }
 
 swh_pinfo()
