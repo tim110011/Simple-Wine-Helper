@@ -41,7 +41,7 @@ app_config()  # application config, MODIFY ME!
     # install guide: dll override, registry work, etc
 
     export prefix="YOUR_APPLICATION_NAME"
-    export working_version="3.7" 		# remember check SWH_FACTORY in swh_config()
+    export working_version="3.8" 		# remember check SWH_FACTORY in swh_config()
     export WINEARCH=win64 							# win32 or win64
     #export invoker="" 								# primusrun; perf recored
     export runner="wine" 							# wine, winedbg
@@ -68,8 +68,8 @@ app_regsetup() # leave for application registry work
 
 swh_config()  # swh config, CHECK ME!
 {
-    export swh_factory="/opt/wine-staging" 				# wine-stable, wine-devel,wine-staging, WINE_INSTALL_DIR
-    export dxvk_dir="/home/me/0_wine/dxvk/dxvk-0.42" 	# DXVK binary release
+    export swh_factory="/opt/wine-staging" 				# wine-stable, wine-devel, wine-staging, WINE_INSTALL_DIR
+    export dxvk_dir="$HOME/_wine_tools/dxvk-0.51" 	# DXVK binary release
     export swh_cellar="$HOME/_wine_cellar" 				# store wine here
     export swh_table="$HOME/_wine" 						# wineprefix dirs cluster
     export WINEDEBUG=fixme-all,+fps
@@ -225,9 +225,10 @@ OPTION:
   -w [winetricks option], --winetricks [winetricks option]
                                            winetricks
   -ww d3dcompiler_42                       let winetricks install d3dcompiler_42
+  -vk, --setup_dxvk                        setup dxvk (experimental)
   -h, --help                               display this help and exit
       --version                            output version information and exit
-  NO ARGUEMENT                             show main menu
+  NO ARGUEMENT                             show basic mode main menu
 
 EXAMPLES:
 
@@ -247,6 +248,12 @@ QUICK GUIDE:
 7. (Optional) Configure advanced settings via winetricks: $(basename $0) -w
 8. Copy or move windows application to wineprefix
 9. Launch application: $(basename $0) -l
+10. (Optional) Make multiple copies of me
+11. (Optional) Rename me
+
+ADVANCED FEATURE SUGGESTION (FOR USERS FAMILIAR WITH BASH ):
+1. View the code and use command arguement
+2. Modding me to add more feature
 
 NOTE:
 Any version of wine (mostly your distro) installed to /bin or /usr/bin directory
@@ -263,6 +270,7 @@ app_menu()  # menu function, modify me (optional)
     cat << APP_MENU_EOF_
 
 Simple Wine Helper - SWH "$SWH_VER"
+    (BASIC MODE, MORE FEATURE AVAIABLE THROUGH COMMAND ARGUEMENT )
 
   a. run "$app1name"
   b. run "$app2name"
@@ -443,10 +451,10 @@ if [ $# -ge 1 ] ; then
         swh_init
         swh_checkwine
         if [[ X"$WINEARCH" == Xwin64 ]]; then
-            cd "$dxvk_dir"/x32
+            cd "$dxvk_dir"/x64
             bash setup_dxvk.sh
         else
-            cd "$dxvk_dir"/x64
+            cd "$dxvk_dir"/x32
             bash setup_dxvk.sh
         fi
         ;;
