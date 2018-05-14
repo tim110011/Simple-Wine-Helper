@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="1.3.20180322.1"
+SWH_VER="1.4"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -40,16 +40,23 @@ app_config()  # application config, MODIFY ME!
     # application Description
     # install guide: dll override, registry work, etc
 
-    export prefix="swh_your_application_name"
-    export working_version="3.3" 		# remember check SWH_FACTORY in swh_config()
-    export WINEARCH=win64 				# win32 or win64
-    #export LC_ALL=zh_CN.utf8 			# for non-unicode program, see 'locale -a' command
+    export prefix="YOUR_APPLICATION_NAME"
+    export working_version="3.7" 		# remember check SWH_FACTORY in swh_config()
+    export WINEARCH=win64 							# win32 or win64
+    #export invoker="" 								# primusrun; perf recored
+    export runner="wine" 							# wine, winedbg
+    #export LC_ALL=zh_CN.utf8 						# for non-unicode program, see 'locale -a' command
 
-    export app1dir="C:\abc"
-    export app1name="xyz.exe"
-    #export app1args=""
+    #export DXVK_DEBUG_LAYERS=1
+    #export DXVK_LOG_LEVEL=debug
+    #export DXVK_HUD=devinfo,fps,drawcalls,memory
+    #export __GL_NextGenCompiler=0 					# Nvidia new Vulkan SPIR-V compiler
 
-    #export app2dir="$app1dir"
+    export app1dir='C:\abc'
+    export app1name='xyz.exe'
+    export app1args=''
+
+    #export app2dir=""
     #export app2name=""
     #export app2args=""
 }
@@ -61,24 +68,22 @@ app_regsetup() # leave for application registry work
 
 swh_config()  # swh config, CHECK ME!
 {
-    #export swh_factory="/opt/wine-stable" 		#use winehq stable
-    export swh_factory="/opt/wine-devel" 		#use winehq development
-    #export swh_factory="/opt/wine-staging" 	#use winehq staging
-    #export swh_factory="WINE_BUILD_DIR" 		#you build wine yourself
-    export swh_cellar="$HOME/_wine_cellar" 		#store wine here
-    export swh_table="$HOME/_wine" 				#wineprefix dirs cluster
-    #export WINEDEBUG=fixme-all
-    export WINEDLLOVERRIDES=winemenubuilder.exe=d 	#swh default setting
+    export swh_factory="/opt/wine-staging" 				# wine-stable, wine-devel,wine-staging, WINE_INSTALL_DIR
+    export dxvk_dir="/home/me/0_wine/dxvk/dxvk-0.42" 	# DXVK binary release
+    export swh_cellar="$HOME/_wine_cellar" 				# store wine here
+    export swh_table="$HOME/_wine" 						# wineprefix dirs cluster
+    export WINEDEBUG=fixme-all,+fps
+    export WINEDLLOVERRIDES=winemenubuilder.exe=d
 }
 
 swh_pinfo()
 {
-    echo "$(basename $0) [INFO] $1"
+    echo "$(basename $0) INFO: $1"
 }
 
 swh_error()
 {
-    echo "$(basename $0) [ERROR] $1" >&2
+    echo "$(basename $0) ERROR: $1" >&2
     exit 1
 }
 
@@ -86,7 +91,7 @@ swh_storewine()
 {
     if ! [ -x "$swh_factory/bin/wine" ] ; then
         echo "swh_factory=$swh_factory"
-        swh_error "wineloader in \$swh_factory/bin: missing or not executable. install winehq or check setting in swh_config()"
+        swh_error "wine in \$swh_factory/bin: missing or not executable. install winehq or check setting in swh_config()"
     fi
         factory_version=$(wine --version | tr [:upper:] [:lower:] | cut -d - -f 2- | tr -d "()" | tr " " "-")
     swh_pinfo "\$factory_version=$factory_version"
@@ -136,7 +141,7 @@ swh_checkwine()
     fi
     if ! [ -x "$WINEVERPATH/bin/wine" ] ; then
         swh_diag
-        swh_error "wineloader in \$WINEVERPATH/bin:missing or not executable."
+        swh_error "wine in \$WINEVERPATH/bin:missing or not executable."
     fi
 }
 
@@ -156,6 +161,11 @@ swh_regsetup()
     fi
     unset rq
     unset rqv
+}
+
+swh_test()
+{
+:
 }
 
 ww_d3dcompiler_42()  # work with winetricks, use .verb file
@@ -208,7 +218,7 @@ Simple Wine Helper - SWH "$SWH_VER"
 OPTION:
 
   -s, --store                              store wine binary to your repository
-  -c, --cfg, --create                      winecfg or create wineprefix
+  -c, --winecfg, --create                  winecfg or create wineprefix
   -r [regfile], --regedit [regfile]        regedit [regfile]
   -l [application], --launch [application]
                                            run default or specified application
@@ -273,12 +283,20 @@ APP_MENU_EOF_
     a | A)
         swh_init
         swh_checkwine
-        wine start /d "$app1dir" "$app1name"
+        if [ -n "$invoker" ]; then
+            "$invoker" "$runner" start /d "$app1dir" "$app1name" "$app1args"
+        else
+            "$runner" start /d "$app1dir" "$app1name" "$app1args"
+        fi
         ;;
     b | B)
         swh_init
         swh_checkwine
-        wine start /d "$app2dir" "$app2name"
+        if [ -n "$invoker" ]; then
+            "$invoker" "$runner" start /d "$app2dir" "$app2name" "$app2args"
+        else
+            "$runner" start /d "$app2dir" "$app2name" "$app2args"
+        fi
         ;;
     y | Y)
         swh_init
@@ -335,47 +353,51 @@ app_config
 # command line arguements, modify me (optional)
 if [ $# -ge 1 ] ; then
     case "$1" in
-    -l | -l1 | -lapp1 | --launch | -lmb)
+    -l | -l1 | --launch_application_1)
         swh_init
         swh_checkwine
         if [ $# -eq 1 ] ; then
-            if [ -z "$app1args" ] ; then
-                wine start /d "$app1dir" "$app1name"
+            if [ -n "$invoker" ]; then
+                "$invoker" "$runner" start /d "$app1dir" "$app1name" "$app1args"
             else
-                wine start /d "$app1dir" "$app1name" "$app1args"
+                "$runner" start /d "$app1dir" "$app1name" "$app1args"
             fi
         else
             shift
-            wine "$@"
+            if [ -n "$invoker" ]; then
+                "$invoker" "$runner" "$@"
+            else
+                "$runner" "$@"
+            fi
         fi
         ;;
-    -ll | -l2 | -lapp2)
+    -ll | -l2 | --launch_application_2)
         swh_init
         swh_checkwine
-        if [ -z "$app2args" ] ; then
-            wine start /d "$app2dir" "$app2name"
+        if [ -n "$invoker" ]; then
+            "$invoker" "$runner" start /d "$app2dir" "$app2name" "$app2args"
         else
-            wine start /d "$app2dir" "$app2name" "$app2args"
+            "$runner" start /d "$app2dir" "$app2name" "$app2args"
         fi
         ;;
-    #-lll | -l3 | -lapp3)
+    #-lll | -l3 | --launch_application_3)
     #    swh_init
     #    swh_checkwine
-    #    if [ -z "$app3args" ] ; then
-    #        wine start /d "$app3dir" "$app3name"
+    #    if [ -n "$invoker" ]; then
+    #        "$invoker" "$runner" start /d "$app3dir" "$app3name" "$app3args"
     #    else
-    #        wine start /d "$app3dir" "$app3name" "$app3args"
+    #        "$runner" start /d "$app3dir" "$app3name" "$app3args"
     #    fi
     #    ;;
-    -netv | -netfx_setupverifier)
+    -netv | --netfx_setupverifier)
         swh_init
         swh_checkwine
         wine netfx_setupverifier.exe
         ;;
-    -s | --store)
+    -s | --storewine)
         swh_storewine
         ;;
-    -c | --cfg | --create)
+    -c | --winecfg | --create)
         swh_init
         wine winecfg
         #swh_regsetup
@@ -416,6 +438,22 @@ if [ $# -ge 1 ] ; then
         else
             swh_error "bad arguement. try ./$(basename $0) -ww d3dcompiler_42"
         fi
+        ;;
+    -vk | --setup_dxvk)
+        swh_init
+        swh_checkwine
+        if [[ X"$WINEARCH" == Xwin64 ]]; then
+            cd "$dxvk_dir"/x32
+            bash setup_dxvk.sh
+        else
+            cd "$dxvk_dir"/x64
+            bash setup_dxvk.sh
+        fi
+        ;;
+    -zzz | --test)
+        swh_init
+        swh_checkwine
+        swh_test
         ;;
     -h | --help)
         swh_help
