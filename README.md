@@ -1,6 +1,6 @@
 Simple Wine Helper (SWH)
 
-   Command-line interface warpper for wine
+   Command-line interface wrapper for wine
    
        Manage wine binary reopsitory
        Manage wineprefix cluster
