@@ -1,4 +1,4 @@
-Simple Wine Helper (SWH)
+# Simple Wine Helper (SWH)
 
    Command-line interface wrapper for wine
    
