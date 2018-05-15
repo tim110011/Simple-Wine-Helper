@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="1.4"
+SWH_VER="1.4.1"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -69,10 +69,10 @@ app_regsetup() # leave for application registry work
 swh_config()  # swh config, CHECK ME!
 {
     export swh_factory="/opt/wine-staging" 				# wine-stable, wine-devel, wine-staging, WINE_INSTALL_DIR
-    export dxvk_dir="$HOME/_wine_tools/dxvk-0.51" 	# DXVK binary release
+    export dxvk_dir="$HOME/0_wine/dxvk/dxvk-0.51" 		# DXVK binary release
     export swh_cellar="$HOME/_wine_cellar" 				# store wine here
     export swh_table="$HOME/_wine" 						# wineprefix dirs cluster
-    export WINEDEBUG=fixme-all,+fps
+    export WINEDEBUG=fixme-all
     export WINEDLLOVERRIDES=winemenubuilder.exe=d
 }
 
@@ -165,7 +165,7 @@ swh_regsetup()
 
 swh_test()
 {
-:
+    :
 }
 
 ww_d3dcompiler_42()  # work with winetricks, use .verb file
@@ -237,8 +237,8 @@ EXAMPLES:
   $(basename $0) -w d3dcompiler_43      work with winetricks, arguement
 
 QUICK GUIDE:
-1. Install wine pagkage from winehq or wine-staging repository 
-    or set swh_factory variable to your own built wine dir, 
+1. Install wine pagkage from winehq or wine-staging repository
+    or set swh_factory variable to your own built wine dir,
     this directory should contain these dirs: bin lib lib64
 2. Install winetricks
 3. Modify settings in swh_config() app_config() function
@@ -258,8 +258,8 @@ ADVANCED FEATURE SUGGESTION (FOR USERS FAMILIAR WITH BASH ):
 NOTE:
 Any version of wine (mostly your distro) installed to /bin or /usr/bin directory
 (cluttered with other files) is not supported.
-Plese use binary package from winehq or wine-staging repository, 
-or if you build wine yourself, install it to INDEPENDENT directory, 
+Plese use binary package from winehq or wine-staging repository,
+or if you build wine yourself, install it to INDEPENDENT directory,
 for example: in fedora, winehq-staging package is installed to /opt/wine-staging
 Using winetricks: "Select the default wineprefix" means select THIS wineprefix
 _SWH_HELP_EOF_
@@ -447,16 +447,17 @@ if [ $# -ge 1 ] ; then
             swh_error "bad arguement. try ./$(basename $0) -ww d3dcompiler_42"
         fi
         ;;
-    -vk | --setup_dxvk)
+    -vk32 | --setup_dxvk_x32)
         swh_init
         swh_checkwine
-        if [[ X"$WINEARCH" == Xwin64 ]]; then
-            cd "$dxvk_dir"/x64
-            bash setup_dxvk.sh
-        else
-            cd "$dxvk_dir"/x32
-            bash setup_dxvk.sh
-        fi
+        cd "$dxvk_dir"/x32
+        bash setup_dxvk.sh
+        ;;
+    -vk64 | --setup_dxvk_x64)
+        swh_init
+        swh_checkwine
+        cd "$dxvk_dir"/x64
+        bash setup_dxvk.sh
         ;;
     -zzz | --test)
         swh_init
