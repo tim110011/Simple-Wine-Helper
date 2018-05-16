@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="1.4.1"
+SWH_VER="1.4.2"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -225,7 +225,8 @@ OPTION:
   -w [winetricks option], --winetricks [winetricks option]
                                            winetricks
   -ww d3dcompiler_42                       let winetricks install d3dcompiler_42
-  -vk, --setup_dxvk                        setup dxvk (experimental)
+  -vk32, --setup_dxvk_x32                  setup 32bit dxvk
+  -vk64, --setup_dxvk_x64                  setup 64bit dxvk
   -h, --help                               display this help and exit
       --version                            output version information and exit
   NO ARGUEMENT                             show basic mode main menu
