@@ -5,5 +5,6 @@
 * Work with distro package manager
 * Work with winehq repository binary package or your own build
 * Work with winetricks
+* Work with DXVK binary release setup script
 * Integrated application configuration
 * Write with shell script
