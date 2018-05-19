@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="1.4.2"
+SWH_VER="1.4.3"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -41,11 +41,13 @@ app_config()  # application config, MODIFY ME!
     # install guide: dll override, registry work, etc
 
     export prefix="YOUR_APPLICATION_NAME"
-    export working_version="3.8" 		# remember check SWH_FACTORY in swh_config()
+    export working_version="3.8" 					# remember check SWH_FACTORY in swh_config()
     export WINEARCH=win64 							# win32 or win64
     #export invoker="" 								# primusrun; perf recored
     export runner="wine" 							# wine, winedbg
     #export LC_ALL=zh_CN.utf8 						# for non-unicode program, see 'locale -a' command
+
+    #export PULSE_LATENCY_MSEC=60 					# PulseAudio walkaround for some game
 
     #export DXVK_DEBUG_LAYERS=1
     #export DXVK_LOG_LEVEL=debug
