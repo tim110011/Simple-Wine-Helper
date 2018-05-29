@@ -1,14 +1,16 @@
 #!/bin/sh
 
-SWH_VER="1.4.3"
+SWH_VER="1.4.4"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
 # You should see a micro (u with a tail) here [µ]
 # You should see a trademark symbol here [™]
 
-# Simple Wine Helper (SWH)
+#    Simple Wine Helper (SWH)
+#
 #    Command-line interface wrapper for wine
+#
 #        Manage wine binary reopsitory
 #        Manage wineprefix cluster
 #        Work with distro package manager
@@ -41,7 +43,7 @@ app_config()  # application config, MODIFY ME!
     # install guide: dll override, registry work, etc
 
     export prefix="YOUR_APPLICATION_NAME"
-    export working_version="3.8" 					# remember check SWH_FACTORY in swh_config()
+    export working_version="3.9-staging" 					# remember check SWH_FACTORY in swh_config()
     export WINEARCH=win64 							# win32 or win64
     #export invoker="" 								# primusrun; perf recored
     export runner="wine" 							# wine, winedbg
@@ -49,10 +51,12 @@ app_config()  # application config, MODIFY ME!
 
     #export PULSE_LATENCY_MSEC=60 					# PulseAudio walkaround for some game
 
+    # DXVK setting
+    # https://github.com/doitsujin/dxvk/wiki/Driver-support
+
     #export DXVK_DEBUG_LAYERS=1
     #export DXVK_LOG_LEVEL=debug
     #export DXVK_HUD=devinfo,fps,drawcalls,memory
-    #export __GL_NextGenCompiler=0 					# Nvidia new Vulkan SPIR-V compiler
 
     export app1dir='C:\abc'
     export app1name='xyz.exe'
@@ -63,15 +67,10 @@ app_config()  # application config, MODIFY ME!
     #export app2args=""
 }
 
-app_regsetup() # leave for application registry work
-{
-    :
-}
-
 swh_config()  # swh config, CHECK ME!
 {
     export swh_factory="/opt/wine-staging" 				# wine-stable, wine-devel, wine-staging, WINE_INSTALL_DIR
-    export dxvk_dir="$HOME/0_wine/dxvk/dxvk-0.51" 		# DXVK binary release
+    export dxvk_dir="$HOME/0_wine/dxvk/dxvk-0.53" 		# DXVK binary release
     export swh_cellar="$HOME/_wine_cellar" 				# store wine here
     export swh_table="$HOME/_wine" 						# wineprefix dirs cluster
     export WINEDEBUG=fixme-all
