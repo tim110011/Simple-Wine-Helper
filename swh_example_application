@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="1.4.4"
+SWH_VER="1.4.5"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -144,24 +144,6 @@ swh_checkwine()
         swh_diag
         swh_error "wine in \$WINEVERPATH/bin:missing or not executable."
     fi
-}
-
-swh_regsetup()
-{
-    # disable GUI crash dialog
-    rq=$(wine reg query "HKEY_CURRENT_USER\Software\Wine\WineDbg" /v ShowCrashDialog)
-    rqv=$(echo ${rq//[[:blank:]*[:cntrl:]*]/-} | awk '{ gsub(/[-]+/, "\t"); print }' | cut -f 5)
-    if ! [[ X"$rqv" == X"0x0" ]]; then
-        if (wine reg add "HKEY_CURRENT_USER\Software\Wine\WineDbg" /v ShowCrashDialog /t REG_DWORD /d 0); then
-            swh_pinfo "GUI crash dialog disabled."
-        else
-            swh_error "swh_regsetup(): Disable GUI crash dialog error."
-        fi
-    else
-        swh_pinfo "GUI crash dialog already disabled, nothing to do."
-    fi
-    unset rq
-    unset rqv
 }
 
 swh_test()
@@ -324,8 +306,6 @@ APP_MENU_EOF_
     2)
         swh_init
         wine winecfg
-        #swh_regsetup
-        app_regsetup
         ;;
     3)
         swh_init
@@ -410,8 +390,6 @@ if [ $# -ge 1 ] ; then
     -c | --winecfg | --create)
         swh_init
         wine winecfg
-        #swh_regsetup
-        app_regsetup
         ;;
     -r | --regedit)
         swh_init
