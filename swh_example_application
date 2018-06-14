@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="1.4.5"
+SWH_VER="1.4.6"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -43,13 +43,13 @@ app_config()  # application config, MODIFY ME!
     # install guide: dll override, registry work, etc
 
     export prefix="YOUR_APPLICATION_NAME"
-    export working_version="3.9-staging" 					# remember check SWH_FACTORY in swh_config()
+    export working_version="3.10-staging" 					# remember check SWH_FACTORY in swh_config()
     export WINEARCH=win64 							# win32 or win64
     #export invoker="" 								# primusrun; perf recored
     export runner="wine" 							# wine, winedbg
     #export LC_ALL=zh_CN.utf8 						# for non-unicode program, see 'locale -a' command
 
-    #export PULSE_LATENCY_MSEC=60 					# PulseAudio walkaround for some game
+    #export PULSE_LATENCY_MSEC=60 					# PulseAudio walkaround for some game, may mute "Test Sound" in winecfg
 
     # DXVK setting
     # https://github.com/doitsujin/dxvk/wiki/Driver-support
@@ -70,7 +70,7 @@ app_config()  # application config, MODIFY ME!
 swh_config()  # swh config, CHECK ME!
 {
     export swh_factory="/opt/wine-staging" 				# wine-stable, wine-devel, wine-staging, WINE_INSTALL_DIR
-    export dxvk_dir="$HOME/0_wine/dxvk/dxvk-0.53" 		# DXVK binary release
+    export dxvk_dir="$HOME/0_wine/dxvk/dxvk-0.54" 		# DXVK binary release
     export swh_cellar="$HOME/_wine_cellar" 				# store wine here
     export swh_table="$HOME/_wine" 						# wineprefix dirs cluster
     export WINEDEBUG=fixme-all
@@ -79,12 +79,12 @@ swh_config()  # swh config, CHECK ME!
 
 swh_pinfo()
 {
-    echo "$(basename $0) INFO: $1"
+    printf "swh INFO: %s\n" "$@"
 }
 
 swh_error()
 {
-    echo "$(basename $0) ERROR: $1" >&2
+    printf "swh ERROR: %s\n" "$@" >&2
     exit 1
 }
 
@@ -151,20 +151,22 @@ swh_test()
     :
 }
 
-ww_d3dcompiler_42()  # work with winetricks, use .verb file
+## work with winetricks, use .verb file
+# d3dcompiler_42, 32bit and 64bit
+swh_ww_d3dcompiler_42()
 {
     swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
     if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
-        cat > "$swh_tempdir"/d3dcompiler_42.verb <<"_WW_D3DCOMPILER_42_EOF_"
-w_metadata d3dcompiler_42 dlls \
-    title="MS d3dcompiler_42.dll" \
+        cat > "$swh_tempdir"/swh_ww_d3dcompiler_42.verb <<"__SWH_WW_D3DCOMPILER_42_EOF_"
+w_metadata swh_ww_d3dcompiler_42 dlls \
+    title="MS d3dcompiler_42.dll (Simple Wine Helper)" \
     publisher="Microsoft" \
     year="2010" \
     media="download" \
     file1="../directx9/directx_Jun2010_redist.exe" \
     installed_file1="$W_SYSTEM32_DLLS_WIN/d3dcompiler_42.dll" \
 
-load_d3dcompiler_42()
+load_swh_ww_d3dcompiler_42()
 {
     dllname=d3dcompiler_42
 
@@ -184,10 +186,70 @@ load_d3dcompiler_42()
 
     w_override_dlls native $dllname
 }
-_WW_D3DCOMPILER_42_EOF_
-        winetricks "$swh_tempdir"/d3dcompiler_42.verb
+__SWH_WW_D3DCOMPILER_42_EOF_
+        winetricks "$swh_tempdir"/swh_ww_d3dcompiler_42.verb
     else
-        swh_error "WW_D3DCOMPILER(): mktemp error."
+        swh_error "swh_ww_d3dcompiler_42(): mktemp error."
+    fi
+    rm -rf "$swh_tempdir"
+}
+
+# xact, 32bit and 64bit, code copied from winetricks version 20180217
+swh_ww_xact()
+{
+    swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
+    if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
+        cat > "$swh_tempdir"/swh_ww_xact.verb <<"__SWH_WW_XACT_EOF_"
+w_metadata swh_ww_xact dlls \
+    title="MS XACT Engine (Simple Wine Helper)" \
+    publisher="Microsoft" \
+    year="2010" \
+    media="download" \
+    file1="../directx9/directx_Jun2010_redist.exe" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/xactengine2_0.dll"
+
+load_swh_ww_xact()
+{
+    helper_directx_Jun2010
+
+    # Extract xactengine?_?.dll, X3DAudio?_?.dll, xaudio?_?.dll, xapofx?_?.dll
+    w_try_cabextract -d "$W_TMP" -L -F '*_xact_*x86*' "$W_CACHE/directx9/$DIRECTX_NAME"
+    w_try_cabextract -d "$W_TMP" -L -F '*_x3daudio_*x86*' "$W_CACHE/directx9/$DIRECTX_NAME"
+    w_try_cabextract -d "$W_TMP" -L -F '*_xaudio_*x86*' "$W_CACHE/directx9/$DIRECTX_NAME"
+
+    for x in "$W_TMP"/*.cab ; do
+        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F 'xactengine*.dll' "$x"
+        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F 'xaudio*.dll' "$x"
+        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F 'x3daudio*.dll' "$x"
+        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F 'xapofx*.dll' "$x"
+    done
+
+    if test "$W_ARCH" = "win64" ; then
+        w_try_cabextract -d "$W_TMP" -L -F '*_xact_*x64*' "$W_CACHE/directx9/$DIRECTX_NAME"
+        w_try_cabextract -d "$W_TMP" -L -F '*_x3daudio_*x64*' "$W_CACHE/directx9/$DIRECTX_NAME"
+        w_try_cabextract -d "$W_TMP" -L -F '*_xaudio_*x64*' "$W_CACHE/directx9/$DIRECTX_NAME"
+        for x in "$W_TMP"/*x64.cab ; do
+            w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F 'xactengine*.dll' "$x"
+            w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F 'xaudio*.dll' "$x"
+            w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F 'x3daudio*.dll' "$x"
+            w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F 'xapofx*.dll' "$x"
+        done
+    fi
+
+    # Register xactengine?_?.dll
+    for x in "$W_SYSTEM32_DLLS"/xactengine* ; do
+        w_try_regsvr "$(basename "$x")"
+    done
+
+    # and xaudio?_?.dll, but not xaudio2_8 (unsupported)
+    for x in 0 1 2 3 4 5 6 7 ; do
+        w_try_regsvr "$(basename "$W_SYSTEM32_DLLS/xaudio2_${x}")"
+    done
+}
+__SWH_WW_XACT_EOF_
+        winetricks "$swh_tempdir"/swh_ww_xact.verb
+    else
+        swh_error "swh_ww_xact(): mktemp error."
     fi
     rm -rf "$swh_tempdir"
 }
@@ -207,7 +269,8 @@ OPTION:
                                            run default or specified application
   -w [winetricks option], --winetricks [winetricks option]
                                            winetricks
-  -ww d3dcompiler_42                       let winetricks install d3dcompiler_42
+  -ww d3dcompiler_42                       let winetricks install d3dcompiler_42, 32bit and 64bit
+  -ww xact                                 let winetricks install xact, 32bit and 64bit (code copied from winetricks version 20180217)
   -vk32, --setup_dxvk_x32                  setup 32bit dxvk
   -vk64, --setup_dxvk_x64                  setup 64bit dxvk
   -h, --help                               display this help and exit
@@ -264,7 +327,8 @@ Simple Wine Helper - SWH "$SWH_VER"
   2. create wineprefix or run winecfg
   3. regedit
   4. winetricks
-  5. winetricks d3dcompiler_42
+  5. winetricks d3dcompiler_42 (32 bit and 64 bit)
+  6. winetricks xact (32 bit and 64 bit)
   9. help
   0. exit
 
@@ -320,7 +384,12 @@ APP_MENU_EOF_
     5)
         swh_init
         swh_checkwine
-        ww_d3dcompiler_42
+        swh_ww_d3dcompiler_42
+        ;;
+    6)
+        swh_init
+        swh_checkwine
+        swh_ww_xact
         ;;
     9)
         swh_help
@@ -417,14 +486,17 @@ if [ $# -ge 1 ] ; then
             shift
             case "$1" in
             d3dcompiler_42)
-                ww_d3dcompiler_42
+                swh_ww_d3dcompiler_42
+                ;;
+            xact)
+                swh_ww_xact
                 ;;
             *)
-                swh_error "unsupported arguement. try ./$(basename $0) -ww d3dcompiler_42"
+                swh_error "unknown arguement."
                 ;;
             esac
         else
-            swh_error "bad arguement. try ./$(basename $0) -ww d3dcompiler_42"
+            swh_error "wrong arguement."
         fi
         ;;
     -vk32 | --setup_dxvk_x32)
@@ -439,7 +511,7 @@ if [ $# -ge 1 ] ; then
         cd "$dxvk_dir"/x64
         bash setup_dxvk.sh
         ;;
-    -zzz | --test)
+    -z | --test)
         swh_init
         swh_checkwine
         swh_test
