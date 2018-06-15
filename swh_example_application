@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="1.4.6"
+SWH_VER="1.4.7"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -212,39 +212,38 @@ load_swh_ww_xact()
 {
     helper_directx_Jun2010
 
-    # Extract xactengine?_?.dll, X3DAudio?_?.dll, xaudio?_?.dll, xapofx?_?.dll
-    w_try_cabextract -d "$W_TMP" -L -F '*_xact_*x86*' "$W_CACHE/directx9/$DIRECTX_NAME"
-    w_try_cabextract -d "$W_TMP" -L -F '*_x3daudio_*x86*' "$W_CACHE/directx9/$DIRECTX_NAME"
-    w_try_cabextract -d "$W_TMP" -L -F '*_xaudio_*x86*' "$W_CACHE/directx9/$DIRECTX_NAME"
-
-    for x in "$W_TMP"/*.cab ; do
-        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F 'xactengine*.dll' "$x"
-        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F 'xaudio*.dll' "$x"
-        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F 'x3daudio*.dll' "$x"
-        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F 'xapofx*.dll' "$x"
+    rm -rf "$W_TMP"/cab
+    mkdir -p "$W_TMP"/cab || echo "error 276"
+    cabcab=(*XACT_x* *XAudio_x* *X3DAudio_x*)
+    for ((i=0; i < ${#cabcab[*]}; i++)); do
+        cabextract -q -d "$W_TMP"/cab -L -F ${cabcab[i]} "$W_CACHE/directx9/$DIRECTX_NAME"
     done
+
+    rm -rf "$W_TMP"/32
+    mkdir -p "$W_TMP"/32 || echo "error282"
+    for cab32 in "$W_TMP"/cab/*_x86.cab ; do
+        cabextract -q -d "$W_TMP"/32 -L -F '*.dll' "$cab32"
+    done
+    cp -f "$W_TMP"/32/* "$W_SYSTEM32_DLLS"
+    for swh_dllname in $(ls -1 "$W_TMP"/32 | sed -n -E 's/\.dll$//gp'); do
+        w_override_dlls native $swh_dllname
+    done
+    rm -rf "$W_TMP"/32
 
     if test "$W_ARCH" = "win64" ; then
-        w_try_cabextract -d "$W_TMP" -L -F '*_xact_*x64*' "$W_CACHE/directx9/$DIRECTX_NAME"
-        w_try_cabextract -d "$W_TMP" -L -F '*_x3daudio_*x64*' "$W_CACHE/directx9/$DIRECTX_NAME"
-        w_try_cabextract -d "$W_TMP" -L -F '*_xaudio_*x64*' "$W_CACHE/directx9/$DIRECTX_NAME"
-        for x in "$W_TMP"/*x64.cab ; do
-            w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F 'xactengine*.dll' "$x"
-            w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F 'xaudio*.dll' "$x"
-            w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F 'x3daudio*.dll' "$x"
-            w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F 'xapofx*.dll' "$x"
+        rm -rf "$W_TMP"/64
+        mkdir -p "$W_TMP"/64 || echo "error 292"
+        for cab64 in "$W_TMP"/cab/*_x64.cab ; do
+            cabextract -q -d "$W_TMP"/64 -L -F '*.dll' "$cab64"
         done
+        cp -f "$W_TMP"/64/* "$W_SYSTEM64_DLLS"
+        for swh_dllname in $(ls -1 "$W_TMP"/64 | sed -n -E 's/\.dll$//gp'); do
+            w_override_dlls native $swh_dllname
+        done
+        rm -rf "$W_TMP"/64
     fi
 
-    # Register xactengine?_?.dll
-    for x in "$W_SYSTEM32_DLLS"/xactengine* ; do
-        w_try_regsvr "$(basename "$x")"
-    done
-
-    # and xaudio?_?.dll, but not xaudio2_8 (unsupported)
-    for x in 0 1 2 3 4 5 6 7 ; do
-        w_try_regsvr "$(basename "$W_SYSTEM32_DLLS/xaudio2_${x}")"
-    done
+    rm -rf "$W_TMP"/cab
 }
 __SWH_WW_XACT_EOF_
         winetricks "$swh_tempdir"/swh_ww_xact.verb
@@ -270,7 +269,7 @@ OPTION:
   -w [winetricks option], --winetricks [winetricks option]
                                            winetricks
   -ww d3dcompiler_42                       let winetricks install d3dcompiler_42, 32bit and 64bit
-  -ww xact                                 let winetricks install xact, 32bit and 64bit (code copied from winetricks version 20180217)
+  -ww xact                                 let winetricks install xact, 32bit and 64bit
   -vk32, --setup_dxvk_x32                  setup 32bit dxvk
   -vk64, --setup_dxvk_x64                  setup 64bit dxvk
   -h, --help                               display this help and exit
