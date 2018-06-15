@@ -194,7 +194,7 @@ __SWH_WW_D3DCOMPILER_42_EOF_
     rm -rf "$swh_tempdir"
 }
 
-# xact, 32bit and 64bit, code copied from winetricks version 20180217
+# xact, 32bit and 64bit
 swh_ww_xact()
 {
     swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
@@ -213,14 +213,14 @@ load_swh_ww_xact()
     helper_directx_Jun2010
 
     rm -rf "$W_TMP"/cab
-    mkdir -p "$W_TMP"/cab || echo "error 276"
+    mkdir -p "$W_TMP"/cab
     cabcab=(*XACT_x* *XAudio_x* *X3DAudio_x*)
     for ((i=0; i < ${#cabcab[*]}; i++)); do
         cabextract -q -d "$W_TMP"/cab -L -F ${cabcab[i]} "$W_CACHE/directx9/$DIRECTX_NAME"
     done
 
     rm -rf "$W_TMP"/32
-    mkdir -p "$W_TMP"/32 || echo "error282"
+    mkdir -p "$W_TMP"/32
     for cab32 in "$W_TMP"/cab/*_x86.cab ; do
         cabextract -q -d "$W_TMP"/32 -L -F '*.dll' "$cab32"
     done
@@ -232,7 +232,7 @@ load_swh_ww_xact()
 
     if test "$W_ARCH" = "win64" ; then
         rm -rf "$W_TMP"/64
-        mkdir -p "$W_TMP"/64 || echo "error 292"
+        mkdir -p "$W_TMP"/64
         for cab64 in "$W_TMP"/cab/*_x64.cab ; do
             cabextract -q -d "$W_TMP"/64 -L -F '*.dll' "$cab64"
         done
