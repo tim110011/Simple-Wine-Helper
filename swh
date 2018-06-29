@@ -1,0 +1,373 @@
+#!/bin/sh
+
+SWH_VER="2.0.0"
+
+# This is a UTF-8 file
+# You should see an o with two dots over it here [ö]
+# You should see a micro (u with a tail) here [µ]
+# You should see a trademark symbol here [™]
+
+#    Simple Wine Helper (SWH)
+#      Command-line interface wrapper for wine
+
+#
+#    Copyright (C) 2017,2018 佟大维 <tim110011!163.com>
+#
+#    License:
+#        This program is free software; you can redistribute it and/or
+#        modify it under the terms of the GNU Lesser General Public
+#        License as published by the Free Software Foundation; either
+#        version 2.1 of the License, or (at your option) any later
+#        version.
+#
+#        This program is distributed in the hope that it will be useful,
+#        but WITHOUT ANY WARRANTY; without even the implied warranty of
+#        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#        GNU Lesser General Public License for more details.
+#
+#        You should have received a copy of the GNU Lesser General Public
+#        License along with this program.  If not, see
+#        <https://www.gnu.org/licenses/>.
+
+swh_config()  # swh config, CHECK ME!
+{
+    export cellar="$HOME/_wine_cellar" 				# store wine here
+    export table="$HOME/_wine" 						# wineprefix dirs cluster
+    export WINEDEBUG=fixme-all
+    export WINEDLLOVERRIDES=winemenubuilder.exe=d 	# disable it!
+}
+
+swh_error()
+{
+    printf "swh ERROR: %s\n" "$@" >&2
+    exit 1
+}
+
+swh_storewine()
+{
+    if ! [ -x "$install/bin/wine" ] ; then
+        echo "install=$install"
+        swh_error "wine in \$install/bin: missing or not executable. install winehq or check setting in swh_config()"
+    fi
+        build_name=$(wine --version | tr [:upper:] [:lower:] | cut -d - -f 2- | tr -d "()" | tr " " "-")
+    if [ -f "$cellar/$WINEARCH/$build_name/bin/wine" ] ; then
+        printf "%s/%s/%s exists, nothing to do." "$cellar" "$WINEARCH" "$build_name"
+    else
+        if ! (mkdir -p "$cellar/$WINEARCH/$build_name"); then
+            swh_error "swh_storewine(): mkdir error"
+        fi
+        if ! (cp -r "$install"/* "$cellar/$WINEARCH/$build_name"); then
+            swh_error "swh_storewine(): cp error"
+        fi
+    fi
+}
+
+swh_diag()
+{
+    echo 'WINEVERPATH=$cellar/$WINEARCH/$build'
+    echo "WINEVERPATH=$cellar/$WINEARCH/$build"
+    echo 'WINEPREFIX=$table/$WINEARCH/$build/$prefix'
+    echo "WINEPREFIX=$table/$WINEARCH/$build/$prefix"
+}
+
+swh_init()
+{
+    if ! [ -d "$cellar/$WINEARCH/$build" ] ; then
+        swh_diag
+        swh_error "swh_init(): $cellar/$WINEARCH/$build not exist, store wine to your own repository directory before use. try ./$(basename $0) -s"
+    fi
+    export WINEPREFIX="$table/$WINEARCH/$build/$prefix"
+    if ! [ -d "$WINEPREFIX" ]; then
+        mkdir -p "$WINEPREFIX"
+    fi
+    export WINEVERPATH="$cellar/$WINEARCH/$build"
+    export PATH="$WINEVERPATH/bin:$PATH"
+    export WINESERVER="$WINEVERPATH/bin/wineserver"
+    export WINELOADER="$WINEVERPATH/bin/wine"
+    export WINEDLLPATH="$WINEVERPATH/lib/wine/fakedlls"
+    export LD_LIBRARY_PATH="$WINEVERPATH/lib:$LD_LIBRARY_PATH"
+}
+
+swh_checkwine()
+{
+    if ! [ -d "$table/$WINEARCH/$build/$prefix" ] || [ -z "$(ls -A $table/$WINEARCH/$build/$prefix)" ] ; then
+        swh_diag
+        swh_error "swh_checkwine(): wineprefix dir not exist or is empty, explicit create it. try ./$(basename $0) -c"
+    fi
+    if ! [ -x "$WINEVERPATH/bin/wine" ] ; then
+        swh_diag
+        swh_error "wine in \$WINEVERPATH/bin:missing or not executable."
+    fi
+}
+
+swh_test()
+{
+    :
+}
+
+## work with winetricks, use .verb file
+# d3dcompiler_42, 32bit and 64bit
+swh_ww_d3dcompiler_42()
+{
+    swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
+    if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
+        cat > "$swh_tempdir"/swh_ww_d3dcompiler_42.verb <<"__SWH_WW_D3DCOMPILER_42_EOF_"
+w_metadata swh_ww_d3dcompiler_42 dlls \
+    title="MS d3dcompiler_42.dll (Simple Wine Helper)" \
+    publisher="Microsoft" \
+    year="2010" \
+    media="download" \
+    file1="../directx9/directx_Jun2010_redist.exe" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3dcompiler_42.dll" \
+
+load_swh_ww_d3dcompiler_42()
+{
+    dllname=d3dcompiler_42
+
+    helper_directx_Jun2010
+
+    w_try_cabextract -d "$W_TMP" -L -F "*$dllname*x86*" "$W_CACHE"/directx9/$DIRECTX_NAME
+    for x in "$W_TMP"/*.cab; do
+        w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F "$dllname.dll" "$x"
+    done
+    if test "$W_ARCH" = "win64"; then
+        w_try_cabextract -d "$W_TMP" -L -F "*$dllname*x64*" "$W_CACHE"/directx9/$DIRECTX_NAME
+        for x in "$W_TMP"/*x64.cab
+        do
+            w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F "$dllname.dll" "$x"
+        done
+    fi
+
+    w_override_dlls native $dllname
+}
+__SWH_WW_D3DCOMPILER_42_EOF_
+        winetricks "$swh_tempdir"/swh_ww_d3dcompiler_42.verb
+    else
+        swh_error "swh_ww_d3dcompiler_42(): mktemp error."
+    fi
+    rm -rf "$swh_tempdir"
+}
+
+# xact, 32bit and 64bit
+swh_ww_xact()
+{
+    swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
+    if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
+        cat > "$swh_tempdir"/swh_ww_xact.verb <<"__SWH_WW_XACT_EOF_"
+w_metadata swh_ww_xact dlls \
+    title="MS XACT Engine (Simple Wine Helper)" \
+    publisher="Microsoft" \
+    year="2010" \
+    media="download" \
+    file1="../directx9/directx_Jun2010_redist.exe" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/xactengine2_0.dll"
+
+load_swh_ww_xact()
+{
+    helper_directx_Jun2010
+
+    rm -rf "$W_TMP"/cab
+    mkdir -p "$W_TMP"/cab
+    cabcab=(*XACT_x* *XAudio_x* *X3DAudio_x*)
+    for ((i=0; i < ${#cabcab[*]}; i++)); do
+        cabextract -q -d "$W_TMP"/cab -L -F ${cabcab[i]} "$W_CACHE/directx9/$DIRECTX_NAME"
+    done
+
+    rm -rf "$W_TMP"/32
+    mkdir -p "$W_TMP"/32
+    for cab32 in "$W_TMP"/cab/*_x86.cab ; do
+        cabextract -q -d "$W_TMP"/32 -L -F '*.dll' "$cab32"
+    done
+    cp -f "$W_TMP"/32/* "$W_SYSTEM32_DLLS"
+    for swh_dllname in $(ls -1 "$W_TMP"/32 | sed -n -E 's/\.dll$//gp'); do
+        w_override_dlls native $swh_dllname
+    done
+    rm -rf "$W_TMP"/32
+
+    if test "$W_ARCH" = "win64" ; then
+        rm -rf "$W_TMP"/64
+        mkdir -p "$W_TMP"/64
+        for cab64 in "$W_TMP"/cab/*_x64.cab ; do
+            cabextract -q -d "$W_TMP"/64 -L -F '*.dll' "$cab64"
+        done
+        cp -f "$W_TMP"/64/* "$W_SYSTEM64_DLLS"
+        for swh_dllname in $(ls -1 "$W_TMP"/64 | sed -n -E 's/\.dll$//gp'); do
+            w_override_dlls native $swh_dllname
+        done
+        rm -rf "$W_TMP"/64
+    fi
+
+    rm -rf "$W_TMP"/cab
+}
+__SWH_WW_XACT_EOF_
+        winetricks "$swh_tempdir"/swh_ww_xact.verb
+    else
+        swh_error "swh_ww_xact(): mktemp error."
+    fi
+    rm -rf "$swh_tempdir"
+}
+
+swh_help()
+{
+    cat << _SWH_HELP_EOF_
+Usage: APP_LAUNCHER COMMAND [arguement]
+
+Commands:
+s                                  Store wine to your cellar dir
+c                                  Run winecfg, Create wineprefix
+r [registry file]                  Run regedit [regfile]
+l                                  Launch application
+w [winetricks command]             Run winetricks
+ww d3dcompiler_42                  Use winetricks install d3dcompiler_42, 32bit and 64bit
+ww xact                            Use winetricks install xact full suit, 32bit and 64bit
+vk32                               Setup 32bit dxvk
+vk64                               Setup 64bit dxvk
+
+Examples:
+  APP_LAUNCHER l 'C:\a b\xy.exe'     run specified application
+  APP_LAUNCHER l cmd                 run wine cmd
+  APP_LAUNCHER w d3dcompiler_43      work with winetricks, arguement
+
+Quick Guide:
+1. Install wine pagkage from winehq repository
+    or set install variable to your build's INDEPENDENT install dir,
+    this directory should contain these dirs: bin lib lib64
+2. Install swh and winetricks, perferred dir is \$HOME/bin,
+    modify your .bashrc file add it to \$PATH
+3. Make a copy of example_app_launcher. Rename it and modify settings
+5. Store wine your cellar dir: APP_LAUNCHER s
+6. Create wineprefix: APP_LAUNCHER c
+7. Tweak advanced settings via winetricks: APP_LAUNCHER w
+8. Copy or move windows application to wineprefix
+9. Launch application: APP_LAUNCHER l
+
+NOTE:
+1. Supported wine build: Any which is installed to an INDEPENDENT directory
+2. Using winetricks: "Select the default wineprefix" means select THIS wineprefix
+_SWH_HELP_EOF_
+}
+
+#main()
+#{
+
+if (( $#>0 )) ; then
+    swh_config
+    case "$1" in
+    l | l1)
+        swh_init
+        swh_checkwine
+        if [ $# -eq 1 ] ; then
+            if [ -n "$invoker" ]; then
+                "$invoker" "$runner" start /d "$app1dir" "$app1name" "$app1args"
+            else
+                "$runner" start /d "$app1dir" "$app1name" "$app1args"
+            fi
+        else
+            shift
+            if [ -n "$invoker" ]; then
+                "$invoker" "$runner" "$@"
+            else
+                "$runner" "$@"
+            fi
+        fi
+        ;;
+    ll | l2)
+        swh_init
+        swh_checkwine
+        if [ -n "$invoker" ]; then
+            "$invoker" "$runner" start /d "$app2dir" "$app2name" "$app2args"
+        else
+            "$runner" start /d "$app2dir" "$app2name" "$app2args"
+        fi
+        ;;
+    lll | l3)
+        swh_init
+        swh_checkwine
+        if [ -n "$invoker" ]; then
+            "$invoker" "$runner" start /d "$app3dir" "$app3name" "$app3args"
+        else
+            "$runner" start /d "$app3dir" "$app3name" "$app3args"
+        fi
+        ;;
+    netv | --netfx_setupverifier)
+        swh_init
+        swh_checkwine
+        wine netfx_setupverifier.exe
+        ;;
+    s)
+        swh_storewine
+        ;;
+    c)
+        swh_init
+        wine winecfg
+        ;;
+    r | --regedit)
+        swh_init
+        swh_checkwine
+        if [ -f "$2" ] ; then
+            regedit "$2"
+        else
+            regedit
+        fi
+        ;;
+    w | --winetricks)
+        swh_init
+        swh_checkwine
+        if [ $# -eq 1 ] ; then
+            winetricks
+        else
+            shift
+            winetricks "$@"
+        fi
+        ;;
+    ww | --swhwinetricks)
+        swh_init
+        swh_checkwine
+        if [ $# -eq 2 ] ; then
+            shift
+            case "$1" in
+            d3dcompiler_42)
+                swh_ww_d3dcompiler_42
+                ;;
+            xact)
+                swh_ww_xact
+                ;;
+            *)
+                swh_error "unknown arguement."
+                ;;
+            esac
+        else
+            swh_error "wrong arguement."
+        fi
+        ;;
+    vk32)
+        swh_init
+        swh_checkwine
+        cd "$dxvk_install"/x32
+        bash setup_dxvk.sh
+        ;;
+    vk64)
+        swh_init
+        swh_checkwine
+        cd "$dxvk_install"/x64
+        bash setup_dxvk.sh
+        ;;
+    z | --test)
+        swh_init
+        swh_checkwine
+        swh_test
+        ;;
+    h | -h | --help)
+        swh_help
+        ;;
+    --version)
+        echo "swh-$SWH_VER"
+        ;;
+    *)
+        swh_help
+        ;;
+    esac
+else
+    swh_help
+fi
+#}
