@@ -12,7 +12,7 @@
 * Independent or Integrated application configuration
 * Write with shell script
 
- **Version:**
+ **Branch/Version:**
  
 `2.x.x` : Independent application configuration
 
