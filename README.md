@@ -6,5 +6,8 @@
 * Work with winehq repository binary package or your own build
 * Work with winetricks
 * Work with DXVK binary release setup script
-* Integrated application configuration
+* Independent or Integrated application configuration
 * Write with shell script
+
+New 2.x.x : Independent application configuration
+Old 1.7.x : Integrated application configuration
