@@ -2,7 +2,7 @@
 
  Command-line interface wrapper for wine
 
- Feature:
+ **Feature:**
 * Manage multiple wine binary releases
 * Manage multiple wineprefix directories
 * Work with distro package manager
@@ -12,8 +12,6 @@
 * Independent or Integrated application configuration
 * Write with shell script
 
- Version:
- 
- `2.x.x` : Independent application configuration
- 
- `1.7.x` : Integrated application configuration
+ **Version:**
+`2.x.x` : Independent application configuration
+`1.7.x` : Integrated application configuration
