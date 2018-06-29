@@ -16,4 +16,4 @@
  
 `2.x.x` : Independent application configuration
 
-`1.7.x` : Integrated application configuration
+`1.4.x` : Integrated application configuration
