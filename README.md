@@ -1,5 +1,8 @@
 # Simple Wine Helper (SWH)
- Command-line interface wrapper for wine   
+ Command-line interface wrapper for wine
+ ---------------------------------------
+ Feature:
+ --------
 * Manage multiple wine binary releases
 * Manage multiple wineprefix directories
 * Work with distro package manager
@@ -8,6 +11,7 @@
 * Work with DXVK binary release setup script
 * Independent or Integrated application configuration
 * Write with shell script
-
-New 2.x.x : Independent application configuration
-Old 1.7.x : Integrated application configuration
+ Version:
+ --------
+`2.x.x` : Independent application configuration
+`1.7.x` : Integrated application configuration
