@@ -1,0 +1,33 @@
+#!/bin/sh
+
+if ! [[ -x "$(which swh 2>/dev/null)" ]]; then
+    printf "ERROR: swh is not installed.\nIt is suggested place swh in %s/bin and add\n  PATH=\$PATH:%s/bin\n  export PATH\nto your .bashrc file.\n" $PWD $HOME
+    exit 1
+fi
+
+## Example Application
+export prefix='example' 						# name it.
+export build='3.11-staging' 					# provided by winehq or your own build.
+export install="/opt/wine-staging" 				# wine binary install dir. different builds may be installed to '/opt/wine-stable', '/opt/wine-devel', '/opt/wine-staging' or your own build dir
+export WINEARCH=win64 							# win32 or win64
+#export invoker="" 								# primusrun; perf recored
+export runner='wine' 							# wine, winedbg.
+#export LC_ALL=zh_CN.utf8 						# for non-unicode program, see 'locale -a' command
+
+## DXVK setting
+export dxvk_install="$HOME/0_wine/dxvk/dxvk-0.61" 		# DXVK binary release or your own build
+#export DXVK_DEBUG_LAYERS=1
+#export DXVK_LOG_LEVEL=debug
+#export DXVK_HUD=devinfo,fps,drawcalls,memory
+
+export app1dir='C:\abc'
+export app1name='xyz.exe'
+export app1args=''
+#export app2dir=""
+#export app2name=""
+#export app2args=""
+#export app3dir=""
+#export app3name=""
+#export app3args=""
+
+swh $@
