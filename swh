@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="2.0.0"
+SWH_VER="2.0.1"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -8,7 +8,9 @@ SWH_VER="2.0.0"
 # You should see a trademark symbol here [™]
 
 #    Simple Wine Helper (SWH)
-#      Command-line interface wrapper for wine
+#
+#        Command-line interface wrapper for wine
+#
 
 #
 #    Copyright (C) 2017,2018 佟大维 <tim110011!163.com>
@@ -32,9 +34,9 @@ SWH_VER="2.0.0"
 swh_config()  # swh config, CHECK ME!
 {
     export cellar="$HOME/_wine_cellar" 				# store wine here
-    export table="$HOME/_wine" 						# wineprefix dirs cluster
+    export table="$HOME/_wine" 					# wineprefix dirs cluster
     export WINEDEBUG=fixme-all
-    export WINEDLLOVERRIDES=winemenubuilder.exe=d 	# disable it!
+    export WINEDLLOVERRIDES=winemenubuilder.exe=d
 }
 
 swh_error()
@@ -74,7 +76,7 @@ swh_init()
 {
     if ! [ -d "$cellar/$WINEARCH/$build" ] ; then
         swh_diag
-        swh_error "swh_init(): $cellar/$WINEARCH/$build not exist, store wine to your own repository directory before use. try ./$(basename $0) -s"
+        swh_error "swh_init(): $cellar/$WINEARCH/$build not exist, store wine to your own repository directory before use. try ./$(basename $0) s"
     fi
     export WINEPREFIX="$table/$WINEARCH/$build/$prefix"
     if ! [ -d "$WINEPREFIX" ]; then
@@ -92,7 +94,7 @@ swh_checkwine()
 {
     if ! [ -d "$table/$WINEARCH/$build/$prefix" ] || [ -z "$(ls -A $table/$WINEARCH/$build/$prefix)" ] ; then
         swh_diag
-        swh_error "swh_checkwine(): wineprefix dir not exist or is empty, explicit create it. try ./$(basename $0) -c"
+        swh_error "swh_checkwine(): wineprefix dir not exist or is empty, explicit create it. try ./$(basename $0) c"
     fi
     if ! [ -x "$WINEVERPATH/bin/wine" ] ; then
         swh_diag
@@ -352,7 +354,7 @@ if (( $#>0 )) ; then
         cd "$dxvk_install"/x64
         bash setup_dxvk.sh
         ;;
-    z | --test)
+    z | z1) 	#test
         swh_init
         swh_checkwine
         swh_test
