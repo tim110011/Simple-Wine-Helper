@@ -5,7 +5,7 @@
  **Feature**
 * Manage multiple wine binary releases
 * Manage multiple wineprefix directories
-* Work with distro (no only Fedora) package manager (dnf)
+* Work with distro (now only Fedora) package manager (dnf)
 * Use with winehq repository binary package or your own build
 * Work with winetricks
 * Use winetricks install d3dcompiler_42
