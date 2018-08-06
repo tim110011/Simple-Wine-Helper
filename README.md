@@ -2,18 +2,26 @@
 
  Command-line interface wrapper for wine
 
- **Feature:**
+ **Feature**
 * Manage multiple wine binary releases
 * Manage multiple wineprefix directories
-* Work with distro package manager
-* Work with winehq repository binary package or your own build
+* Work with distro (no only Fedora) package manager (dnf)
+* Use with winehq repository binary package or your own build
 * Work with winetricks
+* Use winetricks install d3dcompiler_42
+* Use winetricks install dotnet40slim from repacks.net
+* Use winetricks install dotnet472slim from repacks.net
+* Use winetricks install FULL XACT override
 * Work with DXVK binary release setup script
-* Independent or Integrated application configuration
 * Write with shell script
 
- **Branch/Version:**
+ **Usage**
  
-`2.x.x` : Independent application configuration
-
-`1.4.x` : Integrated application configuration
+* Install swh to $HOME/bin
+* Install winetricks to $HOME/bin
+* You may have to add these lines to your .bashrc file:
+```
+PATH=$PATH:$HOME/bin
+export PATH
+```
+* execute `example_app_launcher --help` and follow the quick guide
