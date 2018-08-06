@@ -10,10 +10,15 @@
 * Work with [winetricks](https://wiki.winehq.org/Winetricks)
 * Use winetricks install d3dcompiler_42
 * Use winetricks install dotnet40slim from repacks.net
-* Use winetricks install dotnet472slim from repacks.net
+* Use winetricks install dotnet472slim from repacks.net 
 * Use winetricks install FULL XACT override
 * Work with [DXVK](https://github.com/doitsujin/dxvk) binary release setup script
 * Write with shell script
+
+ **Notice**
+* You need to manually download these repacks from repacks.net. SWH will tell you their storage path.
+* Install dotnet472slim is not supported by winehq, if you're lucky, your game may work.
+* When you install dotnet472slim, SWH will not remind you to install dotnet40slim.
 
  **Usage**
  
