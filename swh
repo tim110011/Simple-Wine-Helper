@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="2.1.0"
+SWH_VER="2.1.1"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -151,104 +151,6 @@ __SWH_WW_D3DCOMPILER_42_EOF_
     rm -rf "$swh_tempdir"
 }
 
-#.NET Framework 4.0 Slim from repacks.net
-swh_ww_dotnet40slim()
-{
-    swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
-    if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
-        verbfile='swh_ww_dotnet40slim.verb'
-        cat > "$swh_tempdir/$verbfile" <<"__SWH_WW_DOTNET40SLIM_EOF_"
-w_metadata swh_ww_dotnet40slim dlls \
-    title="MS .NET 4.0 Slim (Simple Wine Helper)" \
-    publisher="Microsoft" \
-    year="2011" \
-    media="download" \
-    conflicts="dotnet20 dotnet20sdk dotnet20sp1 dotnet20sp2 dotnet35sp1 dotnet40 dotnet46 dotnet461 dotnet462 vjrun20" \
-    file1="dotNetFx40_Full_x86_x64_Slim.exe" \
-    installed_file1="c:/windows/swh_ww_dotnet40slim.installed.workaround"
-
-load_swh_ww_dotnet40slim()
-{
-    if ! [ -f "$HOME/.cache/winetricks/swh_ww_dotnet40slim/$file1" ] ; then
-        w_die "Down load $file1 from repacks.net, place it under $HOME/.cache/winetricks/swh_ww_dotnet40slim/"
-    fi
-
-    w_call remove_mono
-
-    w_call corefonts
-
-    w_set_winver winxp
-
-    w_try_cd "$W_CACHE/$W_PACKAGE"
-
-    WINEDLLOVERRIDES=fusion=b "$WINE" "$file1" && pkill mscorsvw.exe
-
-    w_override_dlls native mscoree
-
-    w_try touch "${W_WINDIR_UNIX}/swh_ww_dotnet40slim.installed.workaround"
-}
-
-verify_dotnet40()
-{
-    w_dotnet_verify dotnet40
-}
-__SWH_WW_DOTNET40SLIM_EOF_
-        winetricks "$swh_tempdir/$verbfile"
-    else
-        swh_error "swh_ww_dotnet40slim(): mktemp error."
-    fi
-    rm -rf "$swh_tempdir"
-}
-
-#.NET Framework 4.7.2 Slim from repacks.net
-swh_ww_dotnet472slim()
-{
-    swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
-    if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
-        verbfile='swh_ww_dotnet472slim.verb'
-        cat > "$swh_tempdir/$verbfile" <<"__SWH_WW_DOTNET472SLIM_EOF_"
-w_metadata swh_ww_dotnet472slim dlls \
-    title="MS .NET 4.7.2 Slim (Simple Wine Helper)" \
-    publisher="Microsoft" \
-    year="2018" \
-    media="download" \
-    conflicts="dotnet20 dotnet20sdk dotnet20sp1 dotnet20sp2 dotnet35sp1 dotnet40 dotnet46 dotnet461 dotnet462 vjrun20" \
-    file1="dotNetFx472_Slim_x86_x64.exe" \
-    installed_file1="c:/windows/swh_ww_dotnet472slim.installed.workaround"
-
-load_swh_ww_dotnet472slim()
-{
-    if ! [ -f "$HOME/.cache/winetricks/swh_ww_dotnet472slim/$file1" ] ; then
-        w_die "Down load $file1 from repacks.net, place it under $HOME/.cache/winetricks/swh_ww_dotnet472slim/"
-    fi
-
-    w_call remove_mono
-
-    w_call corefonts
-
-    w_set_winver win7
-
-    w_try_cd "$W_CACHE/$W_PACKAGE"
-
-    WINEDLLOVERRIDES=fusion=b "$WINE" "$file1" && pkill mscorsvw.exe
-
-    w_override_dlls native mscoree
-
-    w_try touch "${W_WINDIR_UNIX}/swh_ww_dotnet472slim.installed.workaround"
-}
-
-verify_dotnet472()
-{
-    w_dotnet_verify dotnet472
-}
-__SWH_WW_DOTNET472SLIM_EOF_
-        winetricks "$swh_tempdir/$verbfile"
-    else
-        swh_error "swh_ww_dotnet472slim(): mktemp error."
-    fi
-    rm -rf "$swh_tempdir"
-}
-
 # xact, 32bit and 64bit
 swh_ww_xact()
 {
@@ -321,8 +223,6 @@ r [registry file]                  Run regedit [regfile]
 l                                  Launch application
 w [winetricks command]             Run winetricks
 ww d3dcompiler_42                  Use winetricks install d3dcompiler_42, 32bit and 64bit
-ww dotnet40slim                    Use winetricks install dotnet40 slim repack form repack.net
-ww dotnet472slim                   Use winetricks install dotnet472 slim repack form repack.net
 ww xact                            Use winetricks install xact full suit, 32bit and 64bit
 vk32                               Setup 32bit dxvk
 vk64                               Setup 64bit dxvk
@@ -432,12 +332,6 @@ if (( $#>0 )) ; then
             case "$1" in
             d3dcompiler_42)
                 swh_ww_d3dcompiler_42
-                ;;
-            dotnet40slim)
-                swh_ww_dotnet40slim
-                ;;
-            dotnet472slim)
-                swh_ww_dotnet472slim
                 ;;
             xact)
                 swh_ww_xact
