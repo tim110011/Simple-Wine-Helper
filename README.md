@@ -11,8 +11,8 @@
 * Work with [winetricks](https://wiki.winehq.org/Winetricks), the following functions use winetricks verb feature:
 * Install d3dcompiler_42
 * Install FULL XACT override
-* Extract dotnet40 files
-* Extract dotnet472 files
+* Extract dotnet40 files on 64bit prefix
+* Extract dotnet472 files on 64bit prefix
 
  **Change**
 * 2.2.0:
