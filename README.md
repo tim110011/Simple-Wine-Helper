@@ -16,8 +16,8 @@
 
  **Change**
 * 2.2.0:
-* Extract dotnet40 files, using winetricks verb feature
-* Extract dotnet472 files, using winetricks verb feature
+* Extract dotnet40 files on 64bit prefix
+* Extract dotnet472 files on 64bit prefix
 
  **Usage**
  
