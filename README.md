@@ -8,13 +8,17 @@
 * Work with distro (now only Fedora) package manager (dnf)
 * Use with winehq repository binary package or your own build
 * Work with [winetricks](https://wiki.winehq.org/Winetricks)
-* Use winetricks install d3dcompiler_42
-* Use winetricks install FULL XACT override
+* Install d3dcompiler_42, using winetricks verb feature
+* Install FULL XACT override, using winetricks verb feature
+* Extract dotnet40 files, using winetricks verb feature
+* Extract dotnet472 files, using winetricks verb feature
 * Work with [DXVK](https://github.com/doitsujin/dxvk) binary release setup script
 * Write with shell script
 
  **Change**
-* removed not working dotnet slim repacks
+* 2.2.0:
+* Extract dotnet40 files, using winetricks verb feature
+* Extract dotnet472 files, using winetricks verb feature
 
  **Usage**
  
