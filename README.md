@@ -1,19 +1,18 @@
 # Simple Wine Helper (SWH)
 
- Command-line interface wrapper for wine
+ Command-line interface wrapper for wine. Write with shell script
 
  **Feature**
 * Manage multiple wine binary releases
 * Manage multiple wineprefix directories
 * Work with distro (now only Fedora) package manager (dnf)
 * Use with winehq repository binary package or your own build
-* Work with [winetricks](https://wiki.winehq.org/Winetricks)
-* Install d3dcompiler_42, using winetricks verb feature
-* Install FULL XACT override, using winetricks verb feature
-* Extract dotnet40 files, using winetricks verb feature
-* Extract dotnet472 files, using winetricks verb feature
 * Work with [DXVK](https://github.com/doitsujin/dxvk) binary release setup script
-* Write with shell script
+* Work with [winetricks](https://wiki.winehq.org/Winetricks), the following functions use winetricks verb feature:
+* Install d3dcompiler_42
+* Install FULL XACT override
+* Extract dotnet40 files
+* Extract dotnet472 files
 
  **Change**
 * 2.2.0:
