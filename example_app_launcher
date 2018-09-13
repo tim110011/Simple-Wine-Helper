@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# for SWH 2.1.2
+# for SWH 2.2.0
 
 if ! [[ -x "$(which swh 2>/dev/null)" ]]; then
     printf "ERROR: swh is not installed.\nIt is suggested place swh in %s/bin and add\n  PATH=\$PATH:%s/bin\n  export PATH\nto your .bashrc file.\n" $PWD $HOME
@@ -10,7 +10,7 @@ fi
 ## Example Application
 
 export prefix='example' 						# use a unique name
-export build='3.14-staging' 					# This is the dir name in cellar, provided by winehq or your own build.
+export build='3.15-staging' 					# This is the dir name in cellar, provided by winehq or your own build.
 export install="/opt/wine-staging" 				# On fedora, winehq-staging is installed here. Use '/opt/wine-stable', '/opt/wine-devel', '/opt/wine-staging' or point to your own build dir
 export WINEARCH=win64 							# win32 or win64
 #export invoker="" 								# primusrun; perf recored
@@ -19,7 +19,7 @@ export runner=wine64 							# wine, wine64, winedbg
 #export LC_ALL=zh_CN.utf8 						# for non-unicode program, see 'locale -a' command
 
 ## DXVK setting
-export dxvk_install="$HOME/0_wine/dxvk/dxvk-0.70" 						# DXVK binary release or your own build.
+export dxvk_install="$HOME/0_wine/dxvk/dxvk-0.71" 						# DXVK binary release or your own build.
 #export DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/$prefix/dxvk.conf" 	# Some application may require a configuration file
 #export WINEDLLOVERRIDES="nvapi.dll,nvapi64.dll=d"
 
