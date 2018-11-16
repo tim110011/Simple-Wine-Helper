@@ -133,7 +133,7 @@ swh_ww_d3dcompiler_42()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_d3dcompiler_42.verb'
-		cat > "$swh_tempdir/$verbfile" <<"__EOF__"
+		cat > "$swh_tempdir/$verbfile" <<__EOF__
 w_metadata swh_ww_d3dcompiler_42 dlls \
 	title="MS d3dcompiler_42.dll (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -177,7 +177,7 @@ swh_ww_dotnet40extract()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_dotnet40extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<"__EOF__"
+		cat > "$swh_tempdir/$verbfile" <<__EOF__
 w_metadata swh_ww_dotnet40extract dlls \
 	title="Microsoft .NET Framework 4 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -252,7 +252,7 @@ swh_ww_dotnet472extract()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_dotnet472extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<"__EOF__"
+		cat > "$swh_tempdir/$verbfile" <<__EOF__
 w_metadata swh_ww_dotnet472extract dlls \
 	title="Microsoft .NET Framework 4.7.2 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -326,7 +326,7 @@ swh_ww_xact()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_xact.verb'
-		cat > "$swh_tempdir/$verbfile" <<"__EOF__"
+		cat > "$swh_tempdir/$verbfile" <<__EOF__
 w_metadata swh_ww_xact dlls \
 	title="MS XACT Engine (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -382,7 +382,7 @@ __EOF__
 
 swh_help()
 {
-	cat <<"__EOF__"
+	cat <<__EOF__
 Simple Wine Helper $swh_ver
 
 Usage: APP_LAUNCHER COMMAND [arguement]
