@@ -23,10 +23,10 @@
 
  **Change**
 * 2.3.0:
-* new laucnh mechanism, support upto 99 apps in one launcher
+* New laucnh mechanism, support upto 99 apps in one launcher
 * Better help and quick guide
-* run launcher without arguement show a small menu
-* new command to create drive D: and E:
+* Run launcher without arguement show a small menu
+* New command to create drive D: and E:
 
  **Usage**
  
