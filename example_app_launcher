@@ -1,51 +1,56 @@
 #!/bin/sh
 
-# for SWH 2.2.1
+# for SWH 2.3.0
 
-if ! [[ -x "$(which swh 2>/dev/null)" ]]; then
-    printf "ERROR: swh is not installed.\nIt is suggested place swh in %s/bin and add\n  PATH=\$PATH:%s/bin\n  export PATH\nto your .bashrc file.\n" $PWD $HOME
+if ! [ -x "$(which swh 2>/dev/null)" ]; then
+    printf "ERROR: swh is not installed or is not executable.\nIt is suggested place swh in %s/bin and add\n  PATH=\$PATH:%s/bin\n  PATH\nto your .bashrc file.\n" $PWD $HOME
     exit 1
 fi
 
 ## Example Application
+# your app's special walkaround
 
-export prefix='example'							# use a unique name
-export build='3.18-staging'						# This is the dir name in cellar, provided by winehq or your own build.
-export install='/opt/wine-staging'				# '/opt/wine-stable', '/opt/wine-devel' or '/opt/wine-staging', used for store official winehq (on fedora or maybe your distro) to $cellar(default location is "$HOME/_wine_cellar"). For your own built wine, copy it into $cellar
-export WINEARCH=win64							# win32 or win64
-#export invoker=""								# primusrun; perf recored
-export runner=wine								# wine, wine64, winedbg
+prefix='example'						# use a unique name
+build='3.20-staging'					# This is the dir name in cellar, provided by winehq or your own build.
+install='/opt/wine-staging'				# '/opt/wine-stable', '/opt/wine-devel' or '/opt/wine-staging', used for store official winehq (on fedora or maybe your distro) to $cellar(default location is "$HOME/swh/cellar"). For your own built wine, copy it into $cellar
+WINEARCH=win64							# win32 or win64
+#invoker=""								# primusrun; perf recored
+runner=wine								# wine, wine64, winedbg
 
-#export LC_ALL=zh_CN.utf8						# for non-unicode program, see 'locale -a' command
+#LC_ALL=zh_CN.utf8						# for non-unicode program, see 'locale -a' command
 
 ## DXVK setting
-export dxvk_install="$HOME/0_wine/dxvk/dxvk-0.90"						# DXVK binary release
-#export DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/$prefix/dxvk.conf" 	# Some application may require a configuration file
-#export WINEDLLOVERRIDES="nvapi.dll,nvapi64.dll=d"
+dxvk_install="$HOME/0_wine/dxvk/dxvk-0.92"						# DXVK binary release
+#DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/$prefix/dxvk.conf" 	# Some application may require a configuration file
+#WINEDLLOVERRIDES="nvapi.dll,nvapi64.dll=d"
 
-#export DXVK_DEBUG_LAYERS=1
-#export DXVK_LOG_LEVEL=debug
-#export DXVK_HUD=devinfo,fps,drawcalls,memory
+#DXVK_DEBUG_LAYERS=1
+#DXVK_LOG_LEVEL=debug
+#DXVK_HUD=devinfo,fps,drawcalls,memory
 
-export app1dir='C:\abc'
-export app1name='xyz.exe'
-export app1args=''
+dir[1]='C:\abc'
+exe[1]='xyz.exe'
+#args[1]=''
 
-#export app2dir=""
-#export app2name=''
-#export app2args=''
+#dir[2]=""
+#exe[2]=''
+#args[2]=''
 
-#export app3dir=""
-#export app3name=''
-#export app3args=''
+#dir[3]=""
+#exe[3]=''
+#args[3]=''
 
-#export app4dir=""
-#export app4name=''
-#export app4args=''
+#dir[4]=""
+#exe[4]=''
+#args[4]=''
 
-#export app5dir=""
-#export app5name=''
-#export app5args=''
+#dir[9]=""
+#exe[9]=''
+#args[9]=''
 
-export swh_launcher="$0"
-swh $@
+#dir[99]=""
+#exe[99]=''
+#args[99]=''
+
+swh_launcher="$0"
+source swh $@
