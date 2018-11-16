@@ -13,9 +13,9 @@
 * Install FULL XACT override
 
  **2.3.0 Upgrade Notes**
-* (1) 2.3.0 uses new laucnh mechanism. Please remake all old launchers.(should be quick)
+* (1) 2.3.0 uses new launch mechanism. Please remake all old launchers.(should be quick)
 * (2) Default storage dir changed, see swh_config() in swh. Re-config or move existing $cellar and $table dir.
-* (3) finish setp 1 and 2, then your old prefixes can still work.
+* (3) finish setp 1 and 2, then your old prefixes will still work.
 * (4) Please execute `example_app_launcher --help` to see detailed guide
 
  **Extra Notes**
