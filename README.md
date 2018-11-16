@@ -11,13 +11,22 @@
 * Work with [winetricks](https://wiki.winehq.org/Winetricks), the following functions use winetricks verb feature:
 * Install d3dcompiler_42
 * Install FULL XACT override
-* Extract dotnet40 files on 64bit prefix
-* Extract dotnet472 files on 64bit prefix
+
+ **2.3.0 Upgrade Notes**
+* 1) 2.3.0 uses new laucnh mechanism. Please remake all old launchers.(should be quick)
+* 2) Default storage dir changed, see swh_config() in swh. Re-config or move existing $cellar and $table dir.
+* 3) finish setp 1 and 2, then your old prefixes can still work.
+* 4) Please execute `example_app_launcher --help` to see detailed guide
+
+ **Extra Notes**
+* That experimental dotnet extract function will not work with recent wine versions ( wine-3.20 )
 
  **Change**
-* 2.2.0:
-* Extract dotnet40 files on 64bit prefix
-* Extract dotnet472 files on 64bit prefix
+* 2.3.0:
+* new laucnh mechanism, support upto 99 apps in one launcher
+* Better help and quick guide
+* run launcher without arguement show a small menu
+* new command to create drive D: and E:
 
  **Usage**
  
