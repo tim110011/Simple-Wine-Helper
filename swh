@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SWH_VER="2.2.1"
+swh_ver="2.3.0"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -30,17 +30,18 @@ SWH_VER="2.2.1"
 #		License along with this program.  If not, see
 #		<https://www.gnu.org/licenses/>.
 
-swh_config()  # swh config, CHECK ME!
+swh_config()  # swh default value, modify me
 {
-	export cellar="$HOME/_wine_cellar"				# store wine here
-	export table="$HOME/_wine"						# wineprefix dirs cluster
+	export cellar="$HOME/swh/cellar"				# store wine here
+	export table="$HOME/swh/table"					# wineprefix dirs cluster
+	export drives="$HOME/swh/drives"				# wine drives dir
 	export WINEDEBUG=fixme-all
 	export WINEDLLOVERRIDES=winemenubuilder.exe=d
 }
 
 swh_error()
 {
-	printf "swh ERROR: %s\n" $@ >&2
+	printf "swh ERROR: %s\n" "$*" >&2
 	exit 1
 }
 
@@ -62,8 +63,7 @@ swh_check_dependencies()
 swh_storewine()
 {
 	if ! [ -x "$install/bin/wine" ] ; then
-		printf "install=%s\n" $install
-		swh_error "wine in \$install/bin: missing or not executable. install winehq or check setting in swh_config()"
+		swh_error "wine in \$install/bin: missing or not executable. Install winehq or check \$install in your launcher"
 	fi
 		build_name=$(wine --version | tr [:upper:] [:lower:] | cut -d - -f 2- | tr -d "()" | tr " " "-")
 	if [ -f "$cellar/$WINEARCH/$build_name/bin/wine" ] ; then
@@ -133,7 +133,7 @@ swh_ww_d3dcompiler_42()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_d3dcompiler_42.verb'
-		cat > "$swh_tempdir/$verbfile" <<"__SWH_WW_D3DCOMPILER_42_EOF_"
+		cat > "$swh_tempdir/$verbfile" <<__EOF__
 w_metadata swh_ww_d3dcompiler_42 dlls \
 	title="MS d3dcompiler_42.dll (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -162,7 +162,7 @@ load_swh_ww_d3dcompiler_42()
 
 	w_override_dlls native $dllname
 }
-__SWH_WW_D3DCOMPILER_42_EOF_
+__EOF__
 		winetricks "$swh_tempdir/$verbfile"
 	else
 		swh_error "swh_ww_d3dcompiler_42(): mktemp error."
@@ -177,7 +177,7 @@ swh_ww_dotnet40extract()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_dotnet40extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<"__SWH_WW_DOTNET40EXTRACT_EOF_"
+		cat > "$swh_tempdir/$verbfile" <<__EOF__
 w_metadata swh_ww_dotnet40extract dlls \
 	title="Microsoft .NET Framework 4 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -237,7 +237,7 @@ load_swh_ww_dotnet40extract()
 
 }
 
-__SWH_WW_DOTNET40EXTRACT_EOF_
+__EOF__
 		winetricks "$swh_tempdir/$verbfile"
 	else
 		swh_error "swh_ww_dotnet40extract(): mktemp error."
@@ -252,13 +252,13 @@ swh_ww_dotnet472extract()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_dotnet472extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<"__SWH_WW_DOTNET472EXTRACT_EOF_"
+		cat > "$swh_tempdir/$verbfile" <<__EOF__
 w_metadata swh_ww_dotnet472extract dlls \
 	title="Microsoft .NET Framework 4.7.2 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
 	year="2018" \
 	media="download" \
-	conflicts="dotnet20 dotnet20sdk dotnet20sp1 dotnet20sp2 dotnet35sp1 dotnet40 dotnet46 dotnet461 dotnet462 vjrun20" \
+	conflicts="" \
 	file1="NDP472-KB4054530-x86-x64-AllOS-ENU.exe" \
 	destlist="dotnet472list"
 	installed_file1="c:/windows/swh_ww_dotnet472extract.installed.workaround" \
@@ -312,7 +312,7 @@ load_swh_ww_dotnet472extract()
 
 }
 
-__SWH_WW_DOTNET472EXTRACT_EOF_
+__EOF__
 		winetricks "$swh_tempdir/$verbfile"
 	else
 		swh_error "swh_ww_dotnet472extract(): mktemp error."
@@ -326,7 +326,7 @@ swh_ww_xact()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_xact.verb'
-		cat > "$swh_tempdir/$verbfile" <<"__SWH_WW_XACT_EOF_"
+		cat > "$swh_tempdir/$verbfile" <<__EOF__
 w_metadata swh_ww_xact dlls \
 	title="MS XACT Engine (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -372,7 +372,7 @@ load_swh_ww_xact()
 
 	rm -rf "$W_TMP"/cab
 }
-__SWH_WW_XACT_EOF_
+__EOF__
 		winetricks "$swh_tempdir/$verbfile"
 	else
 		swh_error "swh_ww_xact(): mktemp error."
@@ -382,56 +382,73 @@ __SWH_WW_XACT_EOF_
 
 swh_help()
 {
-	cat << _SWH_HELP_EOF_
+	cat <<__EOF__
+Simple Wine Helper $swh_ver
+
 Usage: APP_LAUNCHER COMMAND [arguement]
 
 Commands:
-s								Store wine to your cellar dir
-c								Run winecfg, Create wineprefix
-cc								same as c, also remove symbolic link z:
-r [registry file]						Run regedit [regfile]
-l [application]							launch specified application: see Examples part.
-1								launch 1st application
-2								launch 2nd application
-3								launch 3rd application
-4								launch 4th application
-5								launch 5th application
-w [winetricks command]						winetricks command
-ww [swh command]						swh command, these commands need winetricks as dependency, but they are NOT winetricks command
-  ww d3dcompiler_42							install d3dcompiler_42, 32bit and 64bit
-  ww xact								install xact full suit, 32bit and 64bit
-  ww dotnet40								(experimental function) extract dotnet40 files only, on 64bit prefix
-  ww dotnet472								(experimental function) extract dotnet472 files only, on 64bit prefix. use this after using ww dotnet40
-oldvk								Setup DXVK 0.5x, 0.6x
-vk								Setup DXVK 0.7x, 0.8x, 0.9x
+s                           Store wine to your cellar dir
+c                           Run winecfg, Create wineprefix
+cc                          Same as c, also remove symbolic link z: your root dir will not visable by wine programs
+cdd                         Use after c or cc, create shared drive D: files in this dir is visable by all wine prefixes (default path: '\$HOME/swh/drives/drive_d')
+cde                         Use after c or cc, create pirvate drive E: files in this dir is visable by this wine prefix only (default path: '\$HOME/swh/drives/\$prefix/drive_e')
+r [registry file]           Run regedit [regfile]
+l [application]             Launch specified application: see Examples below
+1                           Launch 1st application
+2                           Launch 2nd application
+99                          Launch 99th application, swh now supports up to 99 apps in one launcher!
+w [winetricks command]      winetricks command
+ww [swh command]            swh command, these commands need winetricks as dependency, but they are NOT winetricks command
+  ww d3dcompiler_42             install d3dcompiler_42, 32bit and 64bit
+  ww xact                       install xact full suit, 32bit and 64bit
+  ww dotnet40                   (EXPERIMENTIAL FUNCTION) extract dotnet40 files only, on 64bit prefix
+  ww dotnet472                  (EXPERIMENTIAL FUNCTION) extract dotnet472 files only, on 64bit prefix. use this after using ww dotnet40
+oldvk                       Setup DXVK 0.5x, 0.6x
+vk                          Setup DXVK 0.7x, 0.8x, 0.9x
+NO ARGUEMENT                Show a small menu
 
 Examples:
-	APP_LAUNCHER l 'C:\a b\xy.exe'			run specified application
-	APP_LAUNCHER l cmd				run wine cmd
-	APP_LAUNCHER w d3dcompiler_43			this is a winetricks command, it installs d3dcompiler_43 override
-	APP_LAUNCHER ww d3dcompiler_42			this is a swh command, it installs d3dcompiler_42 override
+  APP_LAUNCHER l 'C:\a b\xy.exe'    Run specified application
+  APP_LAUNCHER l cmd                Run wine cmd
+  APP_LAUNCHER w d3dcompiler_43     This is a winetricks command, it installs d3dcompiler_43 override
+  APP_LAUNCHER ww d3dcompiler_42    This is a swh command, it installs d3dcompiler_42 override
 
 Quick Guide:
 1. Install wine into a SEPERATE directory:
-	Use official winehq repository:
-		wine should be installed in directory like: '/opt/wine-stable', '/opt/wine-devel', '/opt/wine-staging'
-	Build wine yourself:
-		modify wine's configure arguement: configure --prefix="SEPERATE_INSTALL_DIR"
-		copy your built wine to \$cellar (default location is '\$HOME/_wine_cellar')
-	This directory should contain these dirs: bin lib lib64
-2. Install swh and winetricks, perferred dir is \$HOME/bin, modify your .bashrc file add it to \$PATH
-3. Make a copy of example_app_launcher. Rename it and modify settings
+  Use official winehq repository:
+    wine should be installed in directory like: '/opt/wine-stable', '/opt/wine-devel', '/opt/wine-staging'
+    Your distro may install their wine package into non-seperate dir like /usr/bin , this is not supported
+  Build wine yourself:
+    modify wine's configure arguement: configure --prefix="SEPERATE_INSTALL_DIR"
+    copy your built wine to \$cellar (default location is '\$HOME/swh/cellar')
+  This directory should contain these dirs: bin lib lib64
+2. Install swh and winetricks, perferred dir is '\$HOME/bin', modify your .bashrc file add it to '\$PATH'
+3. Make a copy of example_launcher. Rename it and modify settings
 5. Store wine into your cellar dir: APP_LAUNCHER s
 6. Create wineprefix: APP_LAUNCHER c
-7. Tweak advanced settings via winetricks: APP_LAUNCHER w
-8. Copy or move windows application to wineprefix
+7A. Wine configuration example for steam users:
+  [Drives] -> [Add] -> [Select Drive Letter] -> [D:] -> [OK] -> [Browse] -> "/home/USERNAME/swh/drives/drive_d/"
+  Put SteamSetup.exe in that dir, make a copy of example_launcher and modify it like this:
+    dir[9]='D:\'
+    exe[9]='SteamSetup.exe'
+  Save new file as steam_launcher, run command "chmod u+x steam_launcher" make it executable
+  Use command "steam_launcher 9" to launch SteamSetup.exe
+  Steam settings:
+    Steam settings -> [Downloads] -> Set Default SteamLibrary Folder to D:\SteamLibrary
+  Modify steam_launcher as:
+    dir[1]='C:\Program Files (x86)\Steam'
+    exe[1]='Steam.exe'
+  Save file, use command "steam_launcher 1" to launch steam
+7B. Old method: Link or copy or move windows application to wineprefix drive_c:
+	path example: /home/USERNAME/swh/table/win64/3.20-staging/example/drive_c/
+8. Tweak advanced settings via winetricks: APP_LAUNCHER w
 9. Launch 1st application: APP_LAUNCHER 1
 10. Launch 2nd application: APP_LAUNCHER 2
 
 NOTE:
 1. Using winetricks: "Select the default wineprefix" means select THIS wineprefix
-2. Your distro may install their wine package into non-seperate dir like /usr/bin , this is not supported.
-_SWH_HELP_EOF_
+__EOF__
 }
 
 #main()
@@ -454,49 +471,22 @@ if (( $# > 0 )); then
 			swh_help
 		fi
 		;;
-	1)
+	[1-9] | [1-9][0-9])
 		swh_init
 		swh_checkwine
+		i=$1
 		if ! [ -v invoker ]; then
-			"$runner" start /d "$app1dir" "$app1name" "$app1args"
+			if [ -z ${args[i]} ];then
+				"$runner" start /d "${dir[i]}" "${exe[i]}"
+			else
+				"$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
+			fi
 		else
-			"$invoker" "$runner" start /d "$app1dir" "$app1name" "$app1args"
-		fi
-		;;
-	2)
-		swh_init
-		swh_checkwine
-		if ! [ -v invoker ]; then
-			"$runner" start /d "$app2dir" "$app2name" "$app2args"
-		else
-			"$invoker" "$runner" start /d "$app2dir" "$app2name" "$app2args"
-		fi
-		;;
-	3)
-		swh_init
-		swh_checkwine
-		if ! [ -v invoker ]; then
-			"$runner" start /d "$app3dir" "$app3name" "$app3args"
-		else
-			"$invoker" "$runner" start /d "$app3dir" "$app3name" "$app3args"
-		fi
-		;;
-	4)
-		swh_init
-		swh_checkwine
-		if ! [ -v invoker ]; then
-			"$runner" start /d "$app4dir" "$app4name" "$app4args"
-		else
-			"$invoker" "$runner" start /d "$app4dir" "$app4name" "$app4args"
-		fi
-		;;
-	5)
-		swh_init
-		swh_checkwine
-		if ! [ -v invoker ]; then
-			"$runner" start /d "$app5dir" "$app5name" "$app5args"
-		else
-			"$invoker" "$runner" start /d "$app5dir" "$app5name" "$app5args"
+			if [ -z ${args[i]} ];then
+				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
+			else
+				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
+			fi
 		fi
 		;;
 	netv | --netfx_setupverifier)
@@ -516,6 +506,20 @@ if (( $# > 0 )); then
 		wine winecfg
 		if [ -L "$WINEPREFIX/dosdevices/z:" ]; then
 			rm "$WINEPREFIX/dosdevices/z:"
+		fi
+		;;
+	cdd)
+		swh_init
+		mkdir -p "$drives/drive_d"
+		if ! (cd $WINEPREFIX/dosdevices && ln -s "$drives/drive_d" d:);then
+			swh_error "cdd: create drive d failed"
+		fi
+		;;
+	cde)
+		swh_init
+		mkdir -p "$drives/$prefix/drive_e"
+		if ! (cd $WINEPREFIX/dosdevices && ln -s "$drives/$prefix/drive_e" e:);then
+			swh_error "cde: create drive e failed"
 		fi
 		;;
 	r | --regedit)
@@ -597,6 +601,30 @@ if (( $# > 0 )); then
 		;;
 	esac
 else
-	swh_help
+	#run launcher without arguement will show menu
+	select item in ${exe[@]} help quit;do
+		i=$REPLY
+		if [ X"$item" == X"help" ]; then
+			swh_help
+			break
+		fi
+		if [ X"$item" == X"quit" ]; then
+			break
+		fi
+		if ! [ -v invoker ]; then
+			if [ -z ${args[i]} ];then
+				"$runner" start /d "${dir[i]}" "${exe[i]}"
+			else
+				"$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
+			fi
+		else
+			if [ -z ${args[i]} ];then
+				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
+			else
+				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
+			fi
+		fi
+		break;
+	done
 fi
 #}
