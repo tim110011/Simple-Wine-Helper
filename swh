@@ -30,7 +30,7 @@ swh_ver="2.3.0"
 #		License along with this program.  If not, see
 #		<https://www.gnu.org/licenses/>.
 
-swh_config()  # swh default value
+swh_config()  # swh default value, modify me
 {
 	export cellar="$HOME/swh/cellar"				# store wine here
 	export table="$HOME/swh/table"					# wineprefix dirs cluster
@@ -133,7 +133,7 @@ swh_ww_d3dcompiler_42()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_d3dcompiler_42.verb'
-		cat > "$swh_tempdir/$verbfile" <<'_EOF_'
+		cat > "$swh_tempdir/$verbfile" <<"__EOF__"
 w_metadata swh_ww_d3dcompiler_42 dlls \
 	title="MS d3dcompiler_42.dll (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -162,7 +162,7 @@ load_swh_ww_d3dcompiler_42()
 
 	w_override_dlls native $dllname
 }
-_EOF_
+__EOF__
 		winetricks "$swh_tempdir/$verbfile"
 	else
 		swh_error "swh_ww_d3dcompiler_42(): mktemp error."
@@ -177,7 +177,7 @@ swh_ww_dotnet40extract()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_dotnet40extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<'_EOF_'
+		cat > "$swh_tempdir/$verbfile" <<"__EOF__"
 w_metadata swh_ww_dotnet40extract dlls \
 	title="Microsoft .NET Framework 4 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -237,7 +237,7 @@ load_swh_ww_dotnet40extract()
 
 }
 
-_EOF_
+__EOF__
 		winetricks "$swh_tempdir/$verbfile"
 	else
 		swh_error "swh_ww_dotnet40extract(): mktemp error."
@@ -252,7 +252,7 @@ swh_ww_dotnet472extract()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_dotnet472extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<'_EOF_'
+		cat > "$swh_tempdir/$verbfile" <<"__EOF__"
 w_metadata swh_ww_dotnet472extract dlls \
 	title="Microsoft .NET Framework 4.7.2 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -266,6 +266,9 @@ w_metadata swh_ww_dotnet472extract dlls \
 load_swh_ww_dotnet472extract()
 {
 
+	if [ X"$WINEARCH" != X'win64' ]; then
+		w_die "This function is made for 64bit wineprefix."
+	fi
 	if [ X"$runner" == X'wine' ]; then
 		export runner=wine64
 		printf "[warn]: runner=wine64\n"
@@ -309,7 +312,7 @@ load_swh_ww_dotnet472extract()
 
 }
 
-_EOF_
+__EOF__
 		winetricks "$swh_tempdir/$verbfile"
 	else
 		swh_error "swh_ww_dotnet472extract(): mktemp error."
@@ -323,7 +326,7 @@ swh_ww_xact()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_xact.verb'
-		cat > "$swh_tempdir/$verbfile" <<'_EOF_'
+		cat > "$swh_tempdir/$verbfile" <<"__EOF__"
 w_metadata swh_ww_xact dlls \
 	title="MS XACT Engine (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -369,7 +372,7 @@ load_swh_ww_xact()
 
 	rm -rf "$W_TMP"/cab
 }
-_EOF_
+__EOF__
 		winetricks "$swh_tempdir/$verbfile"
 	else
 		swh_error "swh_ww_xact(): mktemp error."
@@ -379,7 +382,7 @@ _EOF_
 
 swh_help()
 {
-	cat <<__EOF__
+	cat <<"__EOF__"
 Simple Wine Helper $swh_ver
 
 Usage: APP_LAUNCHER COMMAND [arguement]
