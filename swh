@@ -30,7 +30,7 @@ swh_ver="2.3.0"
 #		License along with this program.  If not, see
 #		<https://www.gnu.org/licenses/>.
 
-swh_config()  # swh default value, modfy
+swh_config()  # swh default value
 {
 	export cellar="$HOME/swh/cellar"				# store wine here
 	export table="$HOME/swh/table"					# wineprefix dirs cluster
