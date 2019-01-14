@@ -22,6 +22,11 @@
 * That experimental dotnet extract function will not work with recent wine versions ( wine-3.20 )
 
  **Change**
+* 2.4.0:
+* Inherit command: copy profile files from old prefix, see script help for details
+* Don't disable winemenubuilder by default
+* Experimental functions disabled
+* Better help and quick guide
 * 2.3.0:
 * New launch mechanism, support upto 99 apps in one launcher
 * Better help and quick guide
@@ -29,7 +34,6 @@
 * New command to create drive D: and E:
 
  **Usage**
- 
 * Install swh to $HOME/bin
 * Install winetricks to $HOME/bin
 * You may have to add these lines to your .bashrc file:
