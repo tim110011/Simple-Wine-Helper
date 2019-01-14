@@ -2,7 +2,7 @@
 
 set -e
 
-swh_ver="2.4.0"
+swh_ver="2.4.1"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -14,7 +14,7 @@ swh_ver="2.4.0"
 #		Command-line interface wrapper for wine
 #
 
-#	Copyright (C) 2017,2018 佟大维 <tim110011!163.com>
+#	Copyright (C) 2017-2019 佟大维 <tim110011!163.com>
 #
 #	License:
 #		This program is free software; you can redistribute it and/or
@@ -718,7 +718,7 @@ else
 	#run launcher without arguement will show menu
 	swh_init
 	swh_checkwine
-	select item in ${exe[@]} help quit; do
+	select item in "${exe[@]}" help quit; do
 		i=$REPLY
 		if [ X"$item" == X"help" ]; then
 			swh_help
