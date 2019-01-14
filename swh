@@ -1,6 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 
-swh_ver="2.3.1"
+set -e
+
+swh_ver="2.4.0"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -36,7 +38,6 @@ swh_config()  # swh default value, modify me
 	export table="$HOME/swh/table"					# wineprefix dirs cluster
 	export drives="$HOME/swh/drives"				# wine drives dir
 	export WINEDEBUG=fixme-all
-	export WINEDLLOVERRIDES=winemenubuilder.exe=d
 }
 
 swh_error()
@@ -49,7 +50,7 @@ swh_check_dependencies()
 {
 	dependencies=(cabextract winetricks)
 	missing=0
-	for ((i=0; i < ${#dependencies[*]}; i++)); do
+	for (( i=0; i < ${#dependencies[*]}; i++ )); do
 		if ! (which ${dependencies[i]} >/dev/null 2>&1); then
 			printf "%s not found.\n" ${dependencies[i]}
 			missing=$(($missing+1))
@@ -102,11 +103,15 @@ swh_init()
 	export WINELOADER="$WINEVERPATH/bin/wine"
 	export WINEDLLPATH="$WINEVERPATH/lib/wine/fakedlls"
 	export LD_LIBRARY_PATH="$WINEVERPATH/lib:$LD_LIBRARY_PATH"
-	# use wine64 on 64bit WINEARCH
-	#if ( [ X"$WINEARCH" == X'win64' ] && [ X"$runner" == X'wine' ] ); then
-	#	export runner=wine64
-	#	printf "[warn]: runner=wine64\n"
-	#fi
+}
+
+# enforce wine64 on 64bit WINEARCH
+swh_enforce_wine64()
+{
+	if ( [ X"$WINEARCH" == X'win64' ] && [ X"$runner" == X'wine' ] ); then
+		export runner=wine64
+		printf "[swh warn]: force using win64 on 64bit WINEARCH!\n"
+	fi
 }
 
 swh_checkwine()
@@ -342,7 +347,7 @@ load_swh_ww_xact()
 	rm -rf "$W_TMP"/cab
 	mkdir -p "$W_TMP"/cab
 	cabcab=(*XACT_x* *XAudio_x* *X3DAudio_x*)
-	for ((i=0; i < ${#cabcab[*]}; i++)); do
+	for (( i=0; i < ${#cabcab[*]}; i++ )); do
 		cabextract -q -d "$W_TMP"/cab -L -F ${cabcab[i]} "$W_CACHE/directx9/$DIRECTX_NAME"
 	done
 
@@ -380,6 +385,78 @@ __EOF__
 	rm -rf "$swh_tempdir"
 }
 
+# Chinese fonts replacement: use source fonts
+swh_ww_cnfonts()
+{
+	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
+	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
+		verbfile='swh_ww_cnfonts.verb'
+		cat > "$swh_tempdir/$verbfile" <<__EOF__
+w_metadata swh_ww_cnfonts fonts \
+    title="Creates aliases for Chinese fonts using Source Han Sans and Source Han Serif" \
+    publisher="Adobe, Google" \
+    year="2014, 2017"
+
+load_swh_ww_cnfonts()
+{
+    # Reference : https://en.wikipedia.org/wiki/Source_Han_Sans
+    # https://en.wikipedia.org/wiki/Source_Han_Serif
+
+    sdir=(/usr/share/fonts /usr/local/share/fonts $HOME/.fonts)
+    idir='missing'
+    for (( i=0; i < ${#sdir[*]}; i++ )); do
+        if [ -f ${sdir[i]}/adobe-source-han-sans-cn/SourceHanSansCN-Regular.otf ]; then
+            idir=${sdir[i]}
+        fi
+    done
+
+    if ! [ -f $idir/adobe-source-han-sans-cn/SourceHanSansCN-Regular.otf ]; then
+        w_die "SourceHanSansCN-Regular.otf not found."
+    fi
+    if ! [ -f $idir/adobe-source-han-serif-cn/SourceHanSerifCN-Regular.otf ]; then
+        w_die "SourceHanSerifCN-Regular.otf not found."
+    fi
+    if ! [ -f $idir/adobe-source-han-sans-tw/SourceHanSansTW-Regular.otf ]; then
+        w_die "SourceHanSansTW-Regular.otf not found."
+    fi
+    if ! [ -f $idir/adobe-source-han-serif-tw/SourceHanSerifTW-Regular.otf ]; then
+        w_die "SourceHanSerifTW-Regular.otf not found."
+    fi
+
+    content_dir=(adobe-source-han-sans-cn adobe-source-han-sans-tw adobe-source-han-serif-cn adobe-source-han-serif-tw)
+    for (( i=0; i < ${#content_dir[*]}; i++ )); do
+        w_try_cp_font_files "$idir/${content_dir[i]}" "$W_FONTSDIR_UNIX" "*.otf"
+    done
+    w_register_font SourceHanSansCN-Regular.otf "Source Han Sans CN"
+    w_register_font SourceHanSerifCN-Regular.otf "Source Han Serif CN"
+    w_register_font SourceHanSansTW-Regular.otf "Source Han Sans TW"
+    w_register_font SourceHanSerifTW-Regular.otf "Source Han Serif TW"
+    w_register_font_replacement "FangSong" "Source Han Serif CN"
+    w_register_font_replacement "Microsoft YaHei" "Source Han Sans CN"
+    w_register_font_replacement "NSimSun" "Source Han Serif CN"
+    w_register_font_replacement "SimHei" "Source Han Sans CN"
+    w_register_font_replacement "SimKai" "Source Han Serif CN"
+    w_register_font_replacement "SimSun" "Source Han Serif CN"
+    w_register_font_replacement "SimSun-ExtB" "Source Han Serif CN"
+    w_register_font_replacement "KaiTi" "Source Han Serif CN"
+    w_register_font_replacement "Microsoft YaHei UI" "Source Han Sans CN"
+    w_register_font_replacement "Dengxian" "Source Han Sans CN"
+    w_register_font_replacement "DFKai-SB" "Source Han Serif TW"
+    w_register_font_replacement "Microsoft JhengHei" "Source Han Sans TW"
+    w_register_font_replacement "MingLiU" "Source Han Serif TW"
+    w_register_font_replacement "PMingLiU" "Source Han Serif TW"
+    w_register_font_replacement "MingLiU-ExtB" "Source Han Sans TW"
+    w_register_font_replacement "PMingLiU-ExtB" "Source Han Sans TW"
+    w_register_font_replacement "Microsoft JhengHei UI" "Source Han Sans TW"
+}
+__EOF__
+		winetricks "$swh_tempdir/$verbfile"
+	else
+		swh_error "swh_ww_cnfonts(): mktemp error."
+	fi
+	rm -rf "$swh_tempdir"
+}
+
 swh_help()
 {
 	cat <<__EOF__
@@ -390,7 +467,8 @@ Usage: APP_LAUNCHER COMMAND [arguement]
 Commands:
 s                           Store wine to your cellar dir
 c                           Run winecfg, Create wineprefix
-cc                          Same as c, also remove symbolic link z: your root dir will not visable by wine programs
+cc                          [VIOLATE BUG REPORTING TERM!] Same as c, also remove symbolic link z: your root dir will not visable by wine programs. Don't use this command if you are using production software
+i                           Inherit old profile files, useful when upgrading from old frefixes: copy these dirs from one old prefix to current prefix: 'C:\users\USERNAME\AppData' 'C:\users\USERNAME\Application Data' 'C:\users\USERNAME\Local Settings'
 cdd                         Use after c or cc, create shared drive D: files in this dir is visable by all wine prefixes (default path: '\$HOME/swh/drives/drive_d')
 cde                         Use after c or cc, create pirvate drive E: files in this dir is visable by this wine prefix only (default path: '\$HOME/swh/drives/\$prefix/drive_e')
 r [registry file]           Run regedit [regfile]
@@ -400,6 +478,7 @@ l [application]             Launch specified application: see Examples below
 99                          Launch 99th application, swh now supports up to 99 apps in one launcher!
 w [winetricks command]      winetricks command
 ww [swh command]            swh command, these commands need winetricks as dependency, but they are NOT winetricks command
+  ww cnfonts                    (EXPERIMENTIAL FUNCTION) use source fonts to replace chinese fonts
   ww d3dcompiler_42             install d3dcompiler_42, 32bit and 64bit
   ww xact                       install xact full suit, 32bit and 64bit
   ww dotnet40                   (EXPERIMENTIAL FUNCTION) extract dotnet40 files only, on 64bit prefix
@@ -411,7 +490,7 @@ NO ARGUEMENT                Show a small menu
 Examples:
   APP_LAUNCHER l 'C:\a b\xy.exe'    Run specified application
   APP_LAUNCHER l cmd                Run wine cmd
-  APP_LAUNCHER w d3dcompiler_43     This is a winetricks command, it installs d3dcompiler_43 override
+  APP_LAUNCHER w d3dcompiler_47     This is a winetricks command, it installs d3dcompiler_47 override
   APP_LAUNCHER ww d3dcompiler_42    This is a swh command, it installs d3dcompiler_42 override
 
 Quick Guide:
@@ -422,6 +501,7 @@ Quick Guide:
   Build wine yourself:
     modify wine's configure arguement: configure --prefix="SEPERATE_INSTALL_DIR"
     copy your built wine to \$cellar (default location is '\$HOME/swh/cellar')
+    valid winecfg path example: '$HOME/swh/cellar/win64/4.0-rc5-staging/bin/winecfg'
   This directory should contain these dirs: bin lib lib64
 2. Install swh and winetricks, perferred dir is '\$HOME/bin', modify your .bashrc file add it to '\$PATH'
 3. Make a copy of example_launcher. Rename it and modify settings
@@ -429,19 +509,25 @@ Quick Guide:
 6. Create wineprefix: APP_LAUNCHER c
 7A. Wine configuration example for steam users:
   [Drives] -> [Add] -> [Select Drive Letter] -> [D:] -> [OK] -> [Browse] -> "/home/USERNAME/swh/drives/drive_d/"
-  Put SteamSetup.exe in that dir, make a copy of example_launcher and modify it like this:
-    dir[9]='D:\'
-    exe[9]='SteamSetup.exe'
+  swh command cdd will also do this work.
+  Put SteamSetup.exe in that dir, drive D: 
+  make a copy of example_launcher and modify it's content:
+    modify \$prefix as comment suggest
+    modify \$build as comment suggest
+    modify \$install as comment suggest
+    modify \$WINEARCH  as comment suggest
+    dir[1]='D:\'
+    exe[1]='SteamSetup.exe'
   Save new file as steam_launcher, run command "chmod u+x steam_launcher" make it executable
-  Use command "steam_launcher 9" to launch SteamSetup.exe
+  Use command "steam_launcher 1" to launch SteamSetup.exe
   Steam settings:
     Steam settings -> [Downloads] -> Set Default SteamLibrary Folder to D:\SteamLibrary
   Modify steam_launcher as:
-    dir[1]='C:\Program Files (x86)\Steam'
-    exe[1]='Steam.exe'
-  Save file, use command "steam_launcher 1" to launch steam
+    dir[2]='C:\Program Files (x86)\Steam'
+    exe[2]='Steam.exe'
+  Save file, use command "steam_launcher 2" to launch steam
 7B. Old method: Link or copy or move windows application to wineprefix drive_c:
-	path example: /home/USERNAME/swh/table/win64/3.20-staging/example/drive_c/
+	path example: /home/USERNAME/swh/table/win64/4.0-rc5-staging/example/drive_c/
 8. Tweak advanced settings via winetricks: APP_LAUNCHER w
 9. Launch 1st application: APP_LAUNCHER 1
 10. Launch 2nd application: APP_LAUNCHER 2
@@ -508,18 +594,40 @@ if (( $# > 0 )); then
 			rm "$WINEPREFIX/dosdevices/z:"
 		fi
 		;;
+	i)
+		swh_init
+		declare -a ar
+		readarray -n 40 ar <<< $( find "$table" -depth -type d -name "$prefix" | grep -v "$WINEPREFIX" )
+		if [[ -v ar ]] && (( ${#ar[@]} >= 1 )); then
+			printf "\nYour current prefix is $WINEPREFIX\nInherit profile files from which old prefix?\n"
+			select op in ${ar[@]}; do
+				me="$(whoami)"
+				opd="$op/drive_c/users/$me"
+				opf=("$opd/AppData" "$opd/Application Data" "$opd/Local Settings")
+				npd="$WINEPREFIX/drive_c/users/$me"
+				for (( i=0; i < ${#opf[@]}; i++ )); do
+					\cp -rfv "${opf[i]}" "$npd"
+				done
+				break;
+			done
+		else
+			printf "Can not inherit: No prefix with same name found."
+		fi
+		;;
 	cdd)
 		swh_init
 		mkdir -p "$drives/drive_d"
-		if ! (cd $WINEPREFIX/dosdevices && ln -s "$drives/drive_d" d:);then
-			swh_error "cdd: create drive d failed"
+		cd $WINEPREFIX/dosdevices
+		if ! [ -L "./d:" ]; then
+			ln -s "$drives/drive_d" d:
 		fi
 		;;
 	cde)
 		swh_init
 		mkdir -p "$drives/$prefix/drive_e"
-		if ! (cd $WINEPREFIX/dosdevices && ln -s "$drives/$prefix/drive_e" e:);then
-			swh_error "cde: create drive e failed"
+		cd $WINEPREFIX/dosdevices
+		if ! [ -L "./e:" ]; then
+			ln -s "$drives/$prefix/drive_e" e:
 		fi
 		;;
 	r | --regedit)
@@ -551,13 +659,19 @@ if (( $# > 0 )); then
 				swh_ww_d3dcompiler_42
 				;;
 			dotnet40)
-				swh_ww_dotnet40extract
+			#	swh_ww_dotnet40extract
+				printf "experimental function disabled"
 				;;
 			dotnet472)
-				swh_ww_dotnet472extract
+			#	swh_ww_dotnet472extract
+				printf "experimental function disabled"
 				;;
 			xact)
 				swh_ww_xact
+				;;
+			cnfonts)
+			#	swh_ww_cnfonts
+				printf "experimental function disabled"
 				;;
 			*)
 				swh_error "unknown arguement."
@@ -604,7 +718,7 @@ else
 	#run launcher without arguement will show menu
 	swh_init
 	swh_checkwine
-	select item in ${exe[@]} help quit;do
+	select item in ${exe[@]} help quit; do
 		i=$REPLY
 		if [ X"$item" == X"help" ]; then
 			swh_help

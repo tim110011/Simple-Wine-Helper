@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# for SWH 2.3.0
+# for SWH 2.4.0
 
 if ! [ -x "$(which swh 2>/dev/null)" ]; then
     printf "ERROR: swh is not installed or is not executable.\nIt is suggested place swh in %s/bin and add\n  PATH=\$PATH:%s/bin\n  PATH\nto your .bashrc file.\n" $PWD $HOME
@@ -10,23 +10,26 @@ fi
 ## Example Application
 # your app's special walkaround
 
-prefix='example'						# use a unique name
-build='3.20-staging'					# This is the dir name in cellar, provided by winehq or your own build.
-install='/opt/wine-staging'				# '/opt/wine-stable', '/opt/wine-devel' or '/opt/wine-staging', used for store official winehq (on fedora or maybe your distro) to $cellar(default location is "$HOME/swh/cellar"). For your own built wine, copy it into $cellar
-WINEARCH=win64							# win32 or win64
-#invoker=""								# primusrun; perf recored
-runner=wine								# wine, wine64, winedbg
+prefix='example'							# give a unique name to your wineprefix
+build='4.0-rc6-staging'						# this is the dir name in cellar, provided by winehq or your own build.
+install='/opt/wine-staging'					# '/opt/wine-stable', '/opt/wine-devel' or '/opt/wine-staging', used for store official winehq (on fedora or maybe your distro) to $cellar(default location is "$HOME/swh/cellar"). For your own built wine, copy it into $cellar
+WINEARCH=win64								# win32 or win64
+#invoker=""									# primusrun; perf recored
+runner=wine									# wine, wine64, winedbg
 
-#LC_ALL=zh_CN.utf8						# for non-unicode program, see 'locale -a' command
+#export WINEDLLOVERRIDES=winemenubuilder.exe=d 		# disable winemenubuilder so wine will not create shortcuts to your native linux system, don't disable it if you use production software!
+#LC_ALL=zh_CN.utf8									# for non-unicode program, see 'locale -a' command
 
 ## DXVK setting
-dxvk_install="$HOME/0_wine/dxvk/dxvk-0.92"						# DXVK binary release
+dxvk_install="$HOME/0_wine/dxvk/dxvk-0.95"						# DXVK binary release
 #DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/$prefix/dxvk.conf" 	# Some application may require a configuration file
-#WINEDLLOVERRIDES="nvapi.dll,nvapi64.dll=d"
+#DXVK_HUD=1
 
-#DXVK_DEBUG_LAYERS=1
-#DXVK_LOG_LEVEL=debug
-#DXVK_HUD=devinfo,fps,drawcalls,memory
+
+# DIFFERENCE from normal indexed array in bash:
+#   1. array[0] is reserved
+#   2. valid subscript range [1-99] 
+#   3. assign array members contiguously
 
 dir[1]='C:\abc'
 exe[1]='xyz.exe'
@@ -43,14 +46,6 @@ exe[1]='xyz.exe'
 #dir[4]=""
 #exe[4]=''
 #args[4]=''
-
-#dir[9]=""
-#exe[9]=''
-#args[9]=''
-
-#dir[99]=""
-#exe[99]=''
-#args[99]=''
 
 swh_launcher="$0"
 source swh $@
