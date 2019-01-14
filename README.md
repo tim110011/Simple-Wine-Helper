@@ -1,6 +1,6 @@
 # Simple Wine Helper (SWH)
 
- Command-line interface wrapper for wine. Write with shell script.
+ Command-line interface wrapper for wine. Write with bash script.
 
  **Feature**
 * Manage multiple wine binary releases
