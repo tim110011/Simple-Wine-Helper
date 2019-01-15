@@ -2,7 +2,7 @@
 
 set -e
 
-swh_ver="2.4.1"
+swh_ver="2.5.0"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -48,6 +48,9 @@ swh_error()
 
 swh_check_dependencies()
 {
+	# detect obsolesced laucher
+	! [ -v build_arch ] && swh_error "Obsolesce launcher not supported! Please remake it according to version $swh_ver"
+	
 	dependencies=(cabextract winetricks)
 	missing=0
 	for (( i=0; i < ${#dependencies[*]}; i++ )); do
@@ -63,41 +66,27 @@ swh_check_dependencies()
 
 swh_storewine()
 {
-	if ! [ -x "$install/bin/wine" ] ; then
-		swh_error "wine in \$install/bin: missing or not executable. Install winehq or check \$install in your launcher"
-	fi
-		build_name=$(wine --version | tr [:upper:] [:lower:] | cut -d - -f 2- | tr -d "()" | tr " " "-")
-	if [ -f "$cellar/$WINEARCH/$build_name/bin/wine" ] ; then
-		printf "%s/%s/%s exists, nothing to do.\n" "$cellar" "$WINEARCH" "$build_name"
+	[ -x "$install/bin/wine" ] || swh_error "\$install/bin/wine is missing or not executable. \$install in your launcher have wrong value or winehq not installed"
+	( [ X"$build_arch"==X"win64" ] && [ -x "$install/bin/wine64" ] ) || swh_error "\$build_arch set to wine64 but \$install/bin/wine64 is missing or not executable!"
+	local lbn=$(wine --version | tr [:upper:] [:lower:] | cut -d - -f 2- | tr -d "()" | tr " " "-")
+	local lwdst="$cellar/$build_arch/$lbn"
+	if ! [ -x "$lwdst/bin/wine" ] ; then
+		mkdir -p "$lwdst"
+		\cp -rfv "$install"/* "$lwdst"
 	else
-		if ! (mkdir -p "$cellar/$WINEARCH/$build_name"); then
-			swh_error "swh_storewine(): mkdir error"
-		fi
-		if ! (cp -r "$install"/* "$cellar/$WINEARCH/$build_name"); then
-			swh_error "swh_storewine(): cp error"
-		fi
+		printf "%s exists, nothing to do.\n" "$lwdst"
 	fi
-}
-
-swh_diag()
-{
-	echo 'WINEVERPATH=$cellar/$WINEARCH/$build'
-	echo "WINEVERPATH=$cellar/$WINEARCH/$build"
-	echo 'WINEPREFIX=$table/$WINEARCH/$build/$prefix'
-	echo "WINEPREFIX=$table/$WINEARCH/$build/$prefix"
+	unset -v lbn
+	unset -v lwdst
 }
 
 swh_init()
 {
-	if ! [ -d "$cellar/$WINEARCH/$build" ] ; then
-		swh_diag
-		swh_error "swh_init(): $cellar/$WINEARCH/$build not exist, store wine to your own repository directory before use. try $swh_launcher s"
-	fi
+	export WINEVERPATH="$cellar/$build_arch/$build"
+	[ -x "$WINEVERPATH/bin/wine" ] || swh_error "swh_init(): $WINEVERPATH/bin/wine is missing or not executable, store wine to your own repository directory before use. try $swh_launcher s"
+	( [ X"$build_arch"==X"win64" ] && [ -x "$WINEVERPATH/bin/wine64" ] ) || swh_error "\$build_arch set to wine64 but $WINEVERPATH/bin/wine64 is missing or not executable!"
 	export WINEPREFIX="$table/$WINEARCH/$build/$prefix"
-	if ! [ -d "$WINEPREFIX" ]; then
-		mkdir -p "$WINEPREFIX"
-	fi
-	export WINEVERPATH="$cellar/$WINEARCH/$build"
+	[ -d "$WINEPREFIX" ] || mkdir -p "$WINEPREFIX"
 	export PATH="$WINEVERPATH/bin:$PATH"
 	export WINESERVER="$WINEVERPATH/bin/wineserver"
 	export WINELOADER="$WINEVERPATH/bin/wine"
@@ -105,30 +94,9 @@ swh_init()
 	export LD_LIBRARY_PATH="$WINEVERPATH/lib:$LD_LIBRARY_PATH"
 }
 
-# enforce wine64 on 64bit WINEARCH
-swh_enforce_wine64()
+swh_checkprefix()
 {
-	if ( [ X"$WINEARCH" == X'win64' ] && [ X"$runner" == X'wine' ] ); then
-		export runner=wine64
-		printf "[swh warn]: force using win64 on 64bit WINEARCH!\n"
-	fi
-}
-
-swh_checkwine()
-{
-	if ! [ -d "$table/$WINEARCH/$build/$prefix" ] || [ -z "$(ls -A $table/$WINEARCH/$build/$prefix)" ] ; then
-		swh_diag
-		swh_error "swh_checkwine(): wineprefix dir not exist or is empty, explicit create it. try $swh_launcher c"
-	fi
-	if ! [ -x "$WINEVERPATH/bin/wine" ] ; then
-		swh_diag
-		swh_error "wine in '$WINEVERPATH'/bin:missing or not executable."
-	fi
-}
-
-swh_test()
-{
-	:
+	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || swh_error "swh_checkprefix(): wineprefix dir does not exist, explicit create it. try $swh_launcher c"
 }
 
 ## work with winetricks, use .verb file
@@ -138,7 +106,7 @@ swh_ww_d3dcompiler_42()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_d3dcompiler_42.verb'
-		cat > "$swh_tempdir/$verbfile" <<__EOF__
+		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_d3dcompiler_42 dlls \
 	title="MS d3dcompiler_42.dll (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -182,7 +150,7 @@ swh_ww_dotnet40extract()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_dotnet40extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<__EOF__
+		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_dotnet40extract dlls \
 	title="Microsoft .NET Framework 4 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -257,7 +225,7 @@ swh_ww_dotnet472extract()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_dotnet472extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<__EOF__
+		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_dotnet472extract dlls \
 	title="Microsoft .NET Framework 4.7.2 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -331,7 +299,7 @@ swh_ww_xact()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_xact.verb'
-		cat > "$swh_tempdir/$verbfile" <<__EOF__
+		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_xact dlls \
 	title="MS XACT Engine (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -391,7 +359,7 @@ swh_ww_cnfonts()
 	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
 	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
 		verbfile='swh_ww_cnfonts.verb'
-		cat > "$swh_tempdir/$verbfile" <<__EOF__
+		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_cnfonts fonts \
     title="Creates aliases for Chinese fonts using Source Han Sans and Source Han Serif" \
     publisher="Adobe, Google" \
@@ -501,7 +469,7 @@ Quick Guide:
   Build wine yourself:
     modify wine's configure arguement: configure --prefix="SEPERATE_INSTALL_DIR"
     copy your built wine to \$cellar (default location is '\$HOME/swh/cellar')
-    valid winecfg path example: '$HOME/swh/cellar/win64/4.0-rc5-staging/bin/winecfg'
+    valid winecfg path example: '$HOME/swh/cellar/win64/4.0-rc6-staging/bin/winecfg'
   This directory should contain these dirs: bin lib lib64
 2. Install swh and winetricks, perferred dir is '\$HOME/bin', modify your .bashrc file add it to '\$PATH'
 3. Make a copy of example_launcher. Rename it and modify settings
@@ -539,13 +507,14 @@ __EOF__
 
 #main()
 #{
+( uname | grep -i "Linux" >/dev/null 2>&1 ) || swh_error "This script runs on Linux!"
 swh_check_dependencies
 swh_config
 if (( $# > 0 )); then
 	case "$1" in
 	l)
 		swh_init
-		swh_checkwine
+		swh_checkprefix
 		if (( $# != 1 )); then
 			shift
 			if ! [ -v invoker ]; then
@@ -559,7 +528,7 @@ if (( $# > 0 )); then
 		;;
 	[1-9] | [1-9][0-9])
 		swh_init
-		swh_checkwine
+		swh_checkprefix
 		i=$1
 		if ! [ -v invoker ]; then
 			if [ -z ${args[i]} ];then
@@ -577,7 +546,7 @@ if (( $# > 0 )); then
 		;;
 	netv | --netfx_setupverifier)
 		swh_init
-		swh_checkwine
+		swh_checkprefix
 		"$runner" netfx_setupverifier.exe
 		;;
 	s)
@@ -597,8 +566,9 @@ if (( $# > 0 )); then
 	i)
 		swh_init
 		declare -a ar
-		readarray -n 40 ar <<< $( find "$table" -depth -type d -name "$prefix" | grep -v "$WINEPREFIX" )
-		if [[ -v ar ]] && (( ${#ar[@]} >= 1 )); then
+		readarray -n 40 ar <<< $( find "$table" -depth -type d -name "$prefix" -print0 | grep -v "$WINEPREFIX" )
+		# ${#ar[@]} always >= 1
+		if ! [ -z ${ar[0]} ]; then
 			printf "\nYour current prefix is $WINEPREFIX\nInherit profile files from which old prefix?\n"
 			select op in ${ar[@]}; do
 				me="$(whoami)"
@@ -611,7 +581,7 @@ if (( $# > 0 )); then
 				break;
 			done
 		else
-			printf "Can not inherit: No prefix with same name found."
+			swh_error "Can not inherit: No prefix with same name found."
 		fi
 		;;
 	cdd)
@@ -632,7 +602,7 @@ if (( $# > 0 )); then
 		;;
 	r | --regedit)
 		swh_init
-		swh_checkwine
+		swh_checkprefix
 		if [ -f "$2" ]; then
 			regedit "$2"
 		else
@@ -641,7 +611,7 @@ if (( $# > 0 )); then
 		;;
 	w | --winetricks)
 		swh_init
-		swh_checkwine
+		swh_checkprefix
 		if (( $# == 1 )); then
 			winetricks
 		else
@@ -651,7 +621,7 @@ if (( $# > 0 )); then
 		;;
 	ww | --swhwinetricks)
 		swh_init
-		swh_checkwine
+		swh_checkprefix
 		if (( $# == 2 )); then
 			shift
 			case "$1" in
@@ -683,7 +653,7 @@ if (( $# > 0 )); then
 		;;
 	oldvk)
 		swh_init
-		swh_checkwine
+		swh_checkprefix
 		printf "installing 32bit old DXVK0.5x/0.6x...\n"
 		cd "$dxvk_install"/x32
 		bash setup_dxvk.sh
@@ -695,15 +665,11 @@ if (( $# > 0 )); then
 		;;
 	vk)
 		swh_init
-		swh_checkwine
+		swh_checkprefix
 		cd "$dxvk_install"
 		winetricks --force setup_dxvk.verb
 		;;
-	z | z1)
-		swh_init
-		swh_checkwine
-		swh_test
-		;;
+#TODO: function clean winemenubuilder shortcuts
 	h | -h | --help)
 		swh_help
 		;;
@@ -717,7 +683,7 @@ if (( $# > 0 )); then
 else
 	#run launcher without arguement will show menu
 	swh_init
-	swh_checkwine
+	swh_checkprefix
 	select item in "${exe[@]}" help quit; do
 		i=$REPLY
 		if [ X"$item" == X"help" ]; then

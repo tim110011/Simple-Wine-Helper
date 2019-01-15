@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
-# for SWH 2.4.0
+# for SWH 2.5.0
 
 if ! [ -x "$(which swh 2>/dev/null)" ]; then
     printf "ERROR: swh is not installed or is not executable.\nIt is suggested place swh in %s/bin and add\n  PATH=\$PATH:%s/bin\n  PATH\nto your .bashrc file.\n" $PWD $HOME
@@ -13,15 +13,16 @@ fi
 prefix='example'							# give a unique name to your wineprefix
 build='4.0-rc6-staging'						# this is the dir name in cellar, provided by winehq or your own build.
 install='/opt/wine-staging'					# '/opt/wine-stable', '/opt/wine-devel' or '/opt/wine-staging', used for store official winehq (on fedora or maybe your distro) to $cellar(default location is "$HOME/swh/cellar"). For your own built wine, copy it into $cellar
-WINEARCH=win64								# win32 or win64
-#invoker=""									# primusrun; perf recored
-runner=wine									# wine, wine64, winedbg
+build_arch=win64							# win32 or win64. arch of your installed/built wine pagkage. when set to win64, you can create 32bit prefix by set WINEARCH=win32
+WINEARCH=win64								# win32 or win64. arch of your wineprefix
 
-#export WINEDLLOVERRIDES=winemenubuilder.exe=d 		# disable winemenubuilder so wine will not create shortcuts to your native linux system, don't disable it if you use production software!
+#invoker=""											# primusrun; perf recored
+runner=wine											# wine, wine64, winedbg
+#export WINEDLLOVERRIDES=winemenubuilder.exe=d 		# disable winemenubuilder so wine will not create shortcuts to your native linux system, but don't disable it if you are using production software!
 #LC_ALL=zh_CN.utf8									# for non-unicode program, see 'locale -a' command
 
 ## DXVK setting
-dxvk_install="$HOME/0_wine/dxvk/dxvk-0.95"						# DXVK binary release
+dxvk_install="$HOME/0_wine/dxvk/dxvk-0.95"						# manually downloaded and extracted DXVK binary release, support version 0.5x-0.9x, note winetricks can also install DXVK
 #DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/$prefix/dxvk.conf" 	# Some application may require a configuration file
 #DXVK_HUD=1
 
