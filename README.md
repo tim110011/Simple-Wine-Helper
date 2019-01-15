@@ -12,26 +12,14 @@
 * Install d3dcompiler_42
 * Install FULL XACT override
 
- **2.3.0 Upgrade Notes**
-* (1) 2.3.0 uses new launch mechanism. Please remake all old launchers.(should be quick)
+ **2.5.0 Upgrade Notes**
+* (1) Old launchers not supported. Please remake all old launchers. (I suggest use meld to compare two files)
 * (2) Default storage dir changed, see swh_config() in swh. Re-config or move existing $cellar and $table dir.
 * (3) finish setp 1 and 2, then your old prefixes will still work.
 * (4) Please execute `example_app_launcher --help` to see detailed guide
 
  **Extra Notes**
 * That experimental dotnet extract function will not work with recent wine versions ( wine-3.20 )
-
- **Change**
-* 2.4.0:
-* Inherit command: copy profile files from old prefix, see script help for details
-* Don't disable winemenubuilder by default
-* Experimental functions disabled
-* Better help and quick guide
-* 2.3.0:
-* New launch mechanism, support upto 99 apps in one launcher
-* Better help and quick guide
-* Run launcher without arguement show a small menu
-* New command to create drive D: and E:
 
  **Usage**
 * Install swh to $HOME/bin
