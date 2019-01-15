@@ -1,8 +1,7 @@
 #!/bin/bash
-
 set -e
 
-swh_ver="2.5.0"
+swh_ver="2.5.1"
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -566,11 +565,11 @@ if (( $# > 0 )); then
 	i)
 		swh_init
 		declare -a ar
-		readarray -n 40 ar <<< $( find "$table" -depth -type d -name "$prefix" -print0 | grep -v "$WINEPREFIX" )
+		readarray -t -n 40 ar <<< $( find "$table" -mindepth 3 -maxdepth 3 -type d -name "$prefix" -print | grep -v "$WINEPREFIX" )
 		# ${#ar[@]} always >= 1
-		if ! [ -z ${ar[0]} ]; then
+		if ! [ -z "${ar[0]}" ]; then
 			printf "\nYour current prefix is $WINEPREFIX\nInherit profile files from which old prefix?\n"
-			select op in ${ar[@]}; do
+			select op in "${ar[@]}"; do
 				me="$(whoami)"
 				opd="$op/drive_c/users/$me"
 				opf=("$opd/AppData" "$opd/Application Data" "$opd/Local Settings")
