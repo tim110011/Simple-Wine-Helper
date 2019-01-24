@@ -8,11 +8,16 @@
 * Work with distro (now only Fedora) package manager (dnf)
 * Use with winehq repository binary package or your own build
 * Work with [DXVK](https://github.com/doitsujin/dxvk) binary release setup script
+* Support Kron4ek's [FAudio MinGW (dlls) builds for Wine](https://github.com/Kron4ek/FAudio-Builds)
+* Added "Clean the Open With List" function
 * Work with [winetricks](https://wiki.winehq.org/Winetricks), the following functions use winetricks verb feature:
 * Install d3dcompiler_42
 * Install FULL XACT override
 
- **2.5.0 Upgrade Notes**
+ **Thanks**
+ * koalaman's [ShellCheck](https://github.com/koalaman/shellcheck) , this tool helps me check bash script for error.
+
+ **2.6.0 Upgrade Notes**
 * (1) Old launchers not supported. Please remake all old launchers. (I suggest use meld to compare two files)
 * (2) Default storage dir changed, see swh_config() in swh. Re-config or move existing $cellar and $table dir.
 * (3) finish setp 1 and 2, then your old prefixes will still work.
