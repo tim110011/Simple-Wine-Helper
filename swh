@@ -725,7 +725,7 @@ rm -f ~/.local/share/mime/application/x-wine-extension*\n\
 		printf "swh-%s\n" "$SWH_VERSION"
 		;;
 	*)
-		swh_help
+		swh_error "unknown command"
 		;;
 	esac
 else
