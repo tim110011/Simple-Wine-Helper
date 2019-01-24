@@ -1,7 +1,8 @@
 #!/bin/bash
+# shellcheck disable=2154
 set -e
 
-swh_ver="2.5.1"
+SWH_VERSION=2.6.0
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -45,30 +46,25 @@ swh_error()
 	exit 1
 }
 
+swh_pause()
+{
+	read -r -p 'Press any key to continue...' temp_var
+	unset temp_var
+}
+
 swh_check_dependencies()
 {
-	# detect obsolesced laucher
-	! [ -v build_arch ] && swh_error "Obsolesce launcher not supported! Please remake it according to version $swh_ver"
-	
-	dependencies=(cabextract winetricks)
-	missing=0
-	for (( i=0; i < ${#dependencies[*]}; i++ )); do
-		if ! (which ${dependencies[i]} >/dev/null 2>&1); then
-			printf "%s not found.\n" ${dependencies[i]}
-			missing=$(($missing+1))
-		fi
-	done
-	if (( $missing > 0 )); then
-		swh_error "$missing dependencies not found."
-	fi
+	{ command -v winetricks >/dev/null; } || { printf "WARN: winetricks not installed!"; swh_pause; }
 }
 
 swh_storewine()
 {
 	[ -x "$install/bin/wine" ] || swh_error "\$install/bin/wine is missing or not executable. \$install in your launcher have wrong value or winehq not installed"
-	( [ X"$build_arch"==X"win64" ] && [ -x "$install/bin/wine64" ] ) || swh_error "\$build_arch set to wine64 but \$install/bin/wine64 is missing or not executable!"
-	local lbn=$(wine --version | tr [:upper:] [:lower:] | cut -d - -f 2- | tr -d "()" | tr " " "-")
-	local lwdst="$cellar/$build_arch/$lbn"
+	{ [ X"$build_arch" == X"win64" ] && [ -x "$install/bin/wine64" ] ; } || swh_error "\$build_arch set to wine64 but \$install/bin/wine64 is missing or not executable!"
+	local lbn
+	local lwdst
+	lbn=$( wine --version | tr "[:upper:]" "[:lower:]" | cut -d - -f 2- | tr -d "()" | tr " " "-" )
+	lwdst="$cellar/$build_arch/$lbn"
 	if ! [ -x "$lwdst/bin/wine" ] ; then
 		mkdir -p "$lwdst"
 		\cp -rfv "$install"/* "$lwdst"
@@ -82,8 +78,8 @@ swh_storewine()
 swh_init()
 {
 	export WINEVERPATH="$cellar/$build_arch/$build"
-	[ -x "$WINEVERPATH/bin/wine" ] || swh_error "swh_init(): $WINEVERPATH/bin/wine is missing or not executable, store wine to your own repository directory before use. try $swh_launcher s"
-	( [ X"$build_arch"==X"win64" ] && [ -x "$WINEVERPATH/bin/wine64" ] ) || swh_error "\$build_arch set to wine64 but $WINEVERPATH/bin/wine64 is missing or not executable!"
+	[ -x "$WINEVERPATH/bin/wine" ] || swh_error "$WINEVERPATH/bin/wine is missing or not executable, store wine to your own repository directory before use. try $swh_launcher s"
+	{ [ X"$build_arch" == X"win64" ] && [ -x "$WINEVERPATH/bin/wine64" ] ; } || swh_error "\$build_arch set to wine64 but $WINEVERPATH/bin/wine64 is missing or not executable!"
 	export WINEPREFIX="$table/$WINEARCH/$build/$prefix"
 	[ -d "$WINEPREFIX" ] || mkdir -p "$WINEPREFIX"
 	export PATH="$WINEVERPATH/bin:$PATH"
@@ -95,17 +91,17 @@ swh_init()
 
 swh_checkprefix()
 {
-	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || swh_error "swh_checkprefix(): wineprefix dir does not exist, explicit create it. try $swh_launcher c"
+	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || swh_error "wineprefix dir does not exist, explicit create it. try $swh_launcher c"
 }
 
 ## work with winetricks, use .verb file
 # d3dcompiler_42, 32bit and 64bit
 swh_ww_d3dcompiler_42()
 {
-	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
-	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
-		verbfile='swh_ww_d3dcompiler_42.verb'
-		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
+	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
+	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
+	verbfile='swh_ww_d3dcompiler_42.verb'
+	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_d3dcompiler_42 dlls \
 	title="MS d3dcompiler_42.dll (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -135,10 +131,7 @@ load_swh_ww_d3dcompiler_42()
 	w_override_dlls native $dllname
 }
 __EOF__
-		winetricks "$swh_tempdir/$verbfile"
-	else
-		swh_error "swh_ww_d3dcompiler_42(): mktemp error."
-	fi
+	winetricks "$swh_tempdir/$verbfile"
 	rm -rf "$swh_tempdir"
 }
 
@@ -146,10 +139,10 @@ __EOF__
 # note: winetricks use sha256sum to verify file, list use sha1sum
 swh_ww_dotnet40extract()
 {
-	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
-	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
-		verbfile='swh_ww_dotnet40extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
+	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
+	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
+	verbfile='swh_ww_dotnet40extract.verb'
+	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_dotnet40extract dlls \
 	title="Microsoft .NET Framework 4 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -186,12 +179,12 @@ load_swh_ww_dotnet40extract()
 
 	exec 0<"$W_CACHE/$W_PACKAGE/$destlist"
 	while read line; do
-		sha1sumkey=$(printf "%s\n" $line | cut -d' ' -f 1)
-		destwindows=$(printf "%s\n" $line | cut -d' ' -f 2-)
-		sourcefile=$(grep -w -m 1 $sha1sumkey "$W_TMP"/sourcelist.txt | cut -d' ' -f 3-)
+		sha1sumkey=$( printf "%s\n" $line | cut -d' ' -f 1 )
+		destwindows=$( printf "%s\n" $line | cut -d' ' -f 2- )
+		sourcefile=$( grep -w -m 1 $sha1sumkey "$W_TMP"/sourcelist.txt | cut -d' ' -f 3- )
 		if [ "$sourcefile" ]; then
-			destdir="$(dirname "$WINEPREFIX/$destwindows")"
-			if ! [ -d "$destdir" ];then
+			destdir="$( dirname "$WINEPREFIX/$destwindows" )"
+			if ! [ -d "$destdir" ]; then
 				mkdir -p "$destdir"
 			fi
 			\cp -rfv "$sourcefile" "$WINEPREFIX/$destwindows"
@@ -210,10 +203,7 @@ load_swh_ww_dotnet40extract()
 }
 
 __EOF__
-		winetricks "$swh_tempdir/$verbfile"
-	else
-		swh_error "swh_ww_dotnet40extract(): mktemp error."
-	fi
+	winetricks "$swh_tempdir/$verbfile"
 	rm -rf "$swh_tempdir"
 }
 
@@ -221,10 +211,10 @@ __EOF__
 # note: winetricks use sha256sum to verify file, list use sha1sum
 swh_ww_dotnet472extract()
 {
-	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
-	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
-		verbfile='swh_ww_dotnet472extract.verb'
-		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
+	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
+	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
+	verbfile='swh_ww_dotnet472extract.verb'
+	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_dotnet472extract dlls \
 	title="Microsoft .NET Framework 4.7.2 extract (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -261,12 +251,12 @@ load_swh_ww_dotnet472extract()
 
 	exec 0<"$W_CACHE/$W_PACKAGE/$destlist"
 	while read line; do
-		sha1sumkey=$(printf "%s\n" $line | cut -d' ' -f 1)
-		destwindows=$(printf "%s\n" $line | cut -d' ' -f 2-)
-		sourcefile=$(grep -w -m 1 $sha1sumkey "$W_TMP"/sourcelist.txt | cut -d' ' -f 3-)
+		sha1sumkey=$( printf "%s\n" $line | cut -d' ' -f 1 )
+		destwindows=$( printf "%s\n" $line | cut -d' ' -f 2- )
+		sourcefile=$( grep -w -m 1 $sha1sumkey "$W_TMP"/sourcelist.txt | cut -d' ' -f 3- )
 		if [ "$sourcefile" ]; then
-			destdir="$(dirname "$WINEPREFIX/$destwindows")"
-			if ! [ -d "$destdir" ];then
+			destdir="$( dirname "$WINEPREFIX/$destwindows" )"
+			if ! [ -d "$destdir" ]; then
 				mkdir -p "$destdir"
 			fi
 			\cp -rfv "$sourcefile" "$WINEPREFIX/$destwindows"
@@ -285,20 +275,17 @@ load_swh_ww_dotnet472extract()
 }
 
 __EOF__
-		winetricks "$swh_tempdir/$verbfile"
-	else
-		swh_error "swh_ww_dotnet472extract(): mktemp error."
-	fi
+	winetricks "$swh_tempdir/$verbfile"
 	rm -rf "$swh_tempdir"
 }
 
 # xact, 32bit and 64bit
 swh_ww_xact()
 {
-	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
-	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
-		verbfile='swh_ww_xact.verb'
-		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
+	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
+	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
+	verbfile='swh_ww_xact.verb'
+	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_xact dlls \
 	title="MS XACT Engine (Simple Wine Helper)" \
 	publisher="Microsoft" \
@@ -324,7 +311,7 @@ load_swh_ww_xact()
 		cabextract -q -d "$W_TMP"/32 -L -F '*.dll' "$cab32"
 	done
 	cp -f "$W_TMP"/32/* "$W_SYSTEM32_DLLS"
-	for swh_dllname in $(ls -1 "$W_TMP"/32 | sed -n -E 's/\.dll$//gp'); do
+	for swh_dllname in $( ls -1 "$W_TMP"/32 | sed -En 's/\.dll$//gp' ); do
 		w_override_dlls native $swh_dllname
 	done
 	rm -rf "$W_TMP"/32
@@ -336,7 +323,7 @@ load_swh_ww_xact()
 			cabextract -q -d "$W_TMP"/64 -L -F '*.dll' "$cab64"
 		done
 		cp -f "$W_TMP"/64/* "$W_SYSTEM64_DLLS"
-		for swh_dllname in $(ls -1 "$W_TMP"/64 | sed -n -E 's/\.dll$//gp'); do
+		for swh_dllname in $( ls -1 "$W_TMP"/64 | sed -En 's/\.dll$//gp' ); do
 			w_override_dlls native $swh_dllname
 		done
 		rm -rf "$W_TMP"/64
@@ -345,20 +332,17 @@ load_swh_ww_xact()
 	rm -rf "$W_TMP"/cab
 }
 __EOF__
-		winetricks "$swh_tempdir/$verbfile"
-	else
-		swh_error "swh_ww_xact(): mktemp error."
-	fi
+	winetricks "$swh_tempdir/$verbfile"
 	rm -rf "$swh_tempdir"
 }
 
 # Chinese fonts replacement: use source fonts
 swh_ww_cnfonts()
 {
-	swh_tempdir="$(mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX")"
-	if ( [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ); then
-		verbfile='swh_ww_cnfonts.verb'
-		cat > "$swh_tempdir/$verbfile" <<'__EOF__'
+	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
+	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
+	verbfile='swh_ww_cnfonts.verb'
+	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
 w_metadata swh_ww_cnfonts fonts \
     title="Creates aliases for Chinese fonts using Source Han Sans and Source Han Serif" \
     publisher="Adobe, Google" \
@@ -417,17 +401,47 @@ load_swh_ww_cnfonts()
     w_register_font_replacement "Microsoft JhengHei UI" "Source Han Sans TW"
 }
 __EOF__
-		winetricks "$swh_tempdir/$verbfile"
-	else
-		swh_error "swh_ww_cnfonts(): mktemp error."
-	fi
+	winetricks "$swh_tempdir/$verbfile"
 	rm -rf "$swh_tempdir"
+}
+
+# faudio_install is set in launcher
+swh_faudio()
+{
+	{ [ X"$runner" == X'wine' ] || [ X"$runner" == X'wine64' ] ; } || swh_error "${FUNCNAME[0]}: wrong value in \$runner"
+
+	[ -d "$faudio_install/x32" ] || swh_error "${FUNCNAME[0]}: 32bit FAudio files not found." 
+	{ [ X"$WINEARCH" == X"win64" ] && [ -d "$faudio_install/x64" ] ; } || swh_error "${FUNCNAME[0]}: 64bit FAudio files not found"
+
+	case "$WINEARCH" in
+		win32)
+			for f in "$faudio_install"/x32/*.dll; do
+				\cp -rfv "$f" "$WINEPREFIX/drive_c/windows/system32"
+			done
+			;;
+		win64)
+			for f in "$faudio_install"/x32/*.dll; do
+				\cp -rfv "$f" "$WINEPREFIX/drive_c/windows/syswow64"
+			done
+			for f in "$faudio_install"/x64/*.dll; do
+				\cp -rfv "$f" "$WINEPREFIX/drive_c/windows/system32"
+			done
+			;;
+		*)
+			swh_error "${FUNCNAME[0]}: wrong value in \$WINEARCH"
+			;;
+	esac
+
+	readarray -t ar<<<"$( find "$faudio_install/x32" -mindepth 1 -maxdepth 1 -type f -name '*.dll' -print | sort | sed -En 's/^.*\///g; s/\.dll$//gp' )"
+	for (( i=0; i<${#ar[@]}; i++ )); do
+		"$runner" reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /d native /f
+	done
 }
 
 swh_help()
 {
 	cat <<__EOF__
-Simple Wine Helper $swh_ver
+Simple Wine Helper $SWH_VERSION
 
 Usage: APP_LAUNCHER COMMAND [arguement]
 
@@ -452,6 +466,8 @@ ww [swh command]            swh command, these commands need winetricks as depen
   ww dotnet472                  (EXPERIMENTIAL FUNCTION) extract dotnet472 files only, on 64bit prefix. use this after using ww dotnet40
 oldvk                       Setup DXVK 0.5x, 0.6x
 vk                          Setup DXVK 0.7x, 0.8x, 0.9x
+faudio                      Setup FAudio, see comment in launcher
+cleanopenwith | cow         Clean the Open With List
 NO ARGUEMENT                Show a small menu
 
 Examples:
@@ -507,6 +523,13 @@ __EOF__
 #main()
 #{
 ( uname | grep -i "Linux" >/dev/null 2>&1 ) || swh_error "This script runs on Linux!"
+[ -v SWH_LAUNCHER ] || \
+	{
+		printf "No launcher or launcher too old, please remake launcher\n"
+		swh_pause
+		swh_help;
+		exit 1
+	}
 swh_check_dependencies
 swh_config
 if (( $# > 0 )); then
@@ -530,13 +553,13 @@ if (( $# > 0 )); then
 		swh_checkprefix
 		i=$1
 		if ! [ -v invoker ]; then
-			if [ -z ${args[i]} ];then
+			if [ -z "${args[i]}" ]; then
 				"$runner" start /d "${dir[i]}" "${exe[i]}"
 			else
 				"$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
 			fi
 		else
-			if [ -z ${args[i]} ];then
+			if [ -z "${args[i]}" ]; then
 				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
 			else
 				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
@@ -565,12 +588,12 @@ if (( $# > 0 )); then
 	i)
 		swh_init
 		declare -a ar
-		readarray -t -n 40 ar <<< $( find "$table" -mindepth 3 -maxdepth 3 -type d -name "$prefix" -print | grep -v "$WINEPREFIX" )
+		readarray -t -n 40 ar<<<"$( find "$table" -mindepth 3 -maxdepth 3 -type d -name "$prefix" -print | grep -v "$WINEPREFIX" )"
 		# ${#ar[@]} always >= 1
-		if ! [ -z "${ar[0]}" ]; then
-			printf "\nYour current prefix is $WINEPREFIX\nInherit profile files from which old prefix?\n"
+		if [ -n "${ar[0]}" ]; then
+			printf "\nYour current prefix is %s\nInherit profile files from which old prefix?\n" "$WINEPREFIX"
 			select op in "${ar[@]}"; do
-				me="$(whoami)"
+				me="$( whoami )"
 				opd="$op/drive_c/users/$me"
 				opf=("$opd/AppData" "$opd/Application Data" "$opd/Local Settings")
 				npd="$WINEPREFIX/drive_c/users/$me"
@@ -586,7 +609,7 @@ if (( $# > 0 )); then
 	cdd)
 		swh_init
 		mkdir -p "$drives/drive_d"
-		cd $WINEPREFIX/dosdevices
+		cd "$WINEPREFIX"/dosdevices
 		if ! [ -L "./d:" ]; then
 			ln -s "$drives/drive_d" d:
 		fi
@@ -594,7 +617,7 @@ if (( $# > 0 )); then
 	cde)
 		swh_init
 		mkdir -p "$drives/$prefix/drive_e"
-		cd $WINEPREFIX/dosdevices
+		cd "$WINEPREFIX"/dosdevices
 		if ! [ -L "./e:" ]; then
 			ln -s "$drives/$prefix/drive_e" e:
 		fi
@@ -668,15 +691,41 @@ if (( $# > 0 )); then
 		cd "$dxvk_install"
 		winetricks --force setup_dxvk.verb
 		;;
-#TODO: function clean winemenubuilder shortcuts
+	faudio)
+		swh_init
+		swh_checkprefix
+		swh_faudio
+		;;
+	cleanopenwith | cow)
+		printf "\
+\n\
+Remove wine programs from your open with list?\n\
+  Continue with the following commands?\n\n\
+rm -f ~/.local/share/mime/packages/x-wine*\n\
+rm -f ~/.local/share/mime/packages/x-wine*\n\
+rm -f ~/.local/share/applications/wine-extension*\n\
+rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*\n\
+rm -f ~/.local/share/mime/application/x-wine-extension*\n\
+\n\
+"
+		read -r -p '(y/n)' temp_var
+		{ [ X"$cow_input" == X'Y' ] || [ X"$cow_input" == X'y' ] ; } && \
+			{
+				\rm -f ~/.local/share/mime/packages/x-wine*;
+				\rm -f ~/.local/share/applications/wine-extension*;
+				\rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*;
+				\rm -f ~/.local/share/mime/application/x-wine-extension*;
+			}
+		unset temp_var
+		;;
 	h | -h | --help)
 		swh_help
 		;;
 	--version)
-		printf "swh-%s\n" $SWH_VER
+		printf "swh-%s\n" "$SWH_VERSION"
 		;;
 	*)
-		swh_help
+		swh_error "unknown command"
 		;;
 	esac
 else
@@ -693,13 +742,13 @@ else
 			break
 		fi
 		if ! [ -v invoker ]; then
-			if [ -z ${args[i]} ];then
+			if [ -z "${args[i]}" ]; then
 				"$runner" start /d "${dir[i]}" "${exe[i]}"
 			else
 				"$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
 			fi
 		else
-			if [ -z ${args[i]} ];then
+			if [ -z "${args[i]}" ]; then
 				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
 			else
 				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
