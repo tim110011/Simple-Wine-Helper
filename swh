@@ -2,7 +2,7 @@
 # shellcheck disable=2154
 set -e
 
-SWH_VERSION=2.6.0
+SWH_VERSION=2.6.1
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -78,7 +78,7 @@ swh_storewine()
 swh_init()
 {
 	export WINEVERPATH="$cellar/$build_arch/$build"
-	[ -x "$WINEVERPATH/bin/wine" ] || swh_error "$WINEVERPATH/bin/wine is missing or not executable, store wine to your own repository directory before use. try $swh_launcher s"
+	[ -x "$WINEVERPATH/bin/wine" ] || swh_error "$WINEVERPATH/bin/wine is missing or not executable, store wine to your own repository directory before use. try $SWH_LAUNCHER s"
 	{ [ X"$build_arch" == X"win64" ] && [ -x "$WINEVERPATH/bin/wine64" ] ; } || swh_error "\$build_arch set to wine64 but $WINEVERPATH/bin/wine64 is missing or not executable!"
 	export WINEPREFIX="$table/$WINEARCH/$build/$prefix"
 	[ -d "$WINEPREFIX" ] || mkdir -p "$WINEPREFIX"
@@ -91,7 +91,7 @@ swh_init()
 
 swh_checkprefix()
 {
-	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || swh_error "wineprefix dir does not exist, explicit create it. try $swh_launcher c"
+	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || swh_error "wineprefix dir does not exist, explicit create it. try $SWH_LAUNCHER c"
 }
 
 ## work with winetricks, use .verb file
