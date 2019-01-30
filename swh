@@ -2,7 +2,7 @@
 # shellcheck disable=2154
 set -e
 
-SWH_VERSION=2.6.1
+SWH_VERSION=2.6.2
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -517,6 +517,7 @@ Quick Guide:
 
 NOTE:
 1. Using winetricks: "Select the default wineprefix" means select THIS wineprefix
+2. This script is used per user, not "Install on this machine for everyone" because many command use username as arguement
 __EOF__
 }
 
@@ -588,11 +589,17 @@ if (( $# > 0 )); then
 	i)
 		swh_init
 		declare -a ar
-		readarray -t -n 40 ar<<<"$( find "$table" -mindepth 3 -maxdepth 3 -type d -name "$prefix" -print | grep -v "$WINEPREFIX" )"
+		if { printf "%s\n" "$prefix" | grep "-" ; }; then
+			temp_var=$( printf "%s\n" "$prefix" | sed -En 's/-.*$//gp' )
+		else
+			temp_var="$prefix"
+		fi
+		readarray -t -n 40 ar<<<"$( find "$table" -mindepth 3 -maxdepth 3 -type d -name "$temp_var*" -print | grep -vx "$WINEPREFIX" )"
 		# ${#ar[@]} always >= 1
 		if [ -n "${ar[0]}" ]; then
-			printf "\nYour current prefix is %s\nInherit profile files from which old prefix?\n" "$WINEPREFIX"
-			select op in "${ar[@]}"; do
+			printf "\nYour current prefix is:\n%s\n\nInherit profile files from which old prefix?\n\n" "$WINEPREFIX"
+			select op in "${ar[@]}" quit; do
+				[ X"$op" == X'quit' ] && break
 				me="$( whoami )"
 				opd="$op/drive_c/users/$me"
 				opf=("$opd/AppData" "$opd/Application Data" "$opd/Local Settings")
@@ -600,11 +607,12 @@ if (( $# > 0 )); then
 				for (( i=0; i < ${#opf[@]}; i++ )); do
 					\cp -rfv "${opf[i]}" "$npd"
 				done
-				break;
+				break
 			done
 		else
 			swh_error "Can not inherit: No prefix with same name found."
 		fi
+		unset temp_var
 		;;
 	cdd)
 		swh_init
@@ -717,6 +725,39 @@ rm -f ~/.local/share/mime/application/x-wine-extension*\n\
 				\rm -f ~/.local/share/mime/application/x-wine-extension*;
 			}
 		unset temp_var
+		;;
+	objdump | od)
+		swh_init
+		swh_checkprefix
+		
+		if (( $# == 2 )); then
+			case "$2" in
+				[1-9] | [1-9][0-9])
+					i=$2
+					local wpath
+					local ldrv
+					local ldf
+					local lfpath
+					wpath="${dir[i]}\\${exe[i]}" 
+					ldrv="$( echo "$wpath" | cut -d : -f 1 | tr '[:upper:]' '[:lower:]' )"
+					ldf="$( echo "$wpath" | cut -d : -f 2- | tr $'\\' '/' )"
+					lfpath="$WINEPREFIX"/dosdevices/"$ldrv":"$ldf"
+					[ -f "$lfpath" ] || swh_error "file not found"
+					printf "\nThis function use linux command \`file\` and \`objdump\` scan ${exe[i]}\n\This will give you a clue how to set your prefix arch and which override you install\n\n"
+					file "$lfpath"
+					objdump -p "$lfpath" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
+					unset wpath
+					unset ldrv
+					unset ldf
+					unset lfpath
+					;;
+				*)
+					swh_error "wrong arguement"
+					;;
+			esac
+		else
+			swh_error "wrong arguement count"
+		fi
 		;;
 	h | -h | --help)
 		swh_help
