@@ -2,7 +2,7 @@
 # shellcheck disable=2154
 set -e
 
-SWH_VERSION=2.6.2
+SWH_VERSION=2.6.3
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -438,6 +438,41 @@ swh_faudio()
 	done
 }
 
+swh_objdump()
+{
+	
+	if (( $# == 1 )); then
+		case "$1" in
+			[1-9] | [1-9][0-9])
+				i=$1
+				local wpath
+				local ldrv
+				local ldf
+				local lfpath
+				wpath="${dir[i]}\\${exe[i]}" 
+				ldrv="$( echo "$wpath" | cut -d : -f 1 | tr '[:upper:]' '[:lower:]' )"
+				ldf="$( echo "$wpath" | cut -d : -f 2- | tr $'\\' '/' )"
+				lfpath="$WINEPREFIX"/dosdevices/"$ldrv":"$ldf"
+				[ -f "$lfpath" ] || swh_error "file not found"
+				printf "\nThis function use linux command \`file\` and \`objdump -p\` scan ${exe[i]} , help you decide proper WINEARCH and dll override\n\n"
+				printf "\n"
+				file "$lfpath"
+				printf "\n"
+				objdump -p "$lfpath" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
+				unset wpath
+				unset ldrv
+				unset ldf
+				unset lfpath
+				;;
+			*)
+				swh_error "wrong arguement"
+				;;
+		esac
+	else
+		swh_error "wrong arguement count"
+	fi
+}
+
 swh_help()
 {
 	cat <<__EOF__
@@ -729,35 +764,7 @@ rm -f ~/.local/share/mime/application/x-wine-extension*\n\
 	objdump | od)
 		swh_init
 		swh_checkprefix
-		
-		if (( $# == 2 )); then
-			case "$2" in
-				[1-9] | [1-9][0-9])
-					i=$2
-					local wpath
-					local ldrv
-					local ldf
-					local lfpath
-					wpath="${dir[i]}\\${exe[i]}" 
-					ldrv="$( echo "$wpath" | cut -d : -f 1 | tr '[:upper:]' '[:lower:]' )"
-					ldf="$( echo "$wpath" | cut -d : -f 2- | tr $'\\' '/' )"
-					lfpath="$WINEPREFIX"/dosdevices/"$ldrv":"$ldf"
-					[ -f "$lfpath" ] || swh_error "file not found"
-					printf "\nThis function use linux command \`file\` and \`objdump\` scan ${exe[i]}\n\This will give you a clue how to set your prefix arch and which override you install\n\n"
-					file "$lfpath"
-					objdump -p "$lfpath" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
-					unset wpath
-					unset ldrv
-					unset ldf
-					unset lfpath
-					;;
-				*)
-					swh_error "wrong arguement"
-					;;
-			esac
-		else
-			swh_error "wrong arguement count"
-		fi
+		swh_objdump "$2"
 		;;
 	h | -h | --help)
 		swh_help
