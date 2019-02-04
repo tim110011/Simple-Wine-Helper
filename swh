@@ -2,7 +2,7 @@
 # shellcheck disable=2154
 set -e
 
-SWH_VERSION=2.6.3
+SWH_VERSION=2.6.4
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -37,6 +37,7 @@ swh_config()  # swh default value, modify me
 	export cellar="$HOME/swh/cellar"				# store wine here
 	export table="$HOME/swh/table"					# wineprefix dirs cluster
 	export drives="$HOME/swh/drives"				# wine drives dir
+	#export WINEDEBUG=fixme-all,+loaddll,+tid
 	export WINEDEBUG=fixme-all
 }
 
@@ -91,7 +92,7 @@ swh_init()
 
 swh_checkprefix()
 {
-	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || swh_error "wineprefix dir does not exist, explicit create it. try $SWH_LAUNCHER c"
+	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || swh_error "wineprefix dir does not exist, if you are on a slow HDD, please wait some seconds. To create it, try $SWH_LAUNCHER c"
 }
 
 ## work with winetricks, use .verb file
@@ -454,8 +455,7 @@ swh_objdump()
 				ldf="$( echo "$wpath" | cut -d : -f 2- | tr $'\\' '/' )"
 				lfpath="$WINEPREFIX"/dosdevices/"$ldrv":"$ldf"
 				[ -f "$lfpath" ] || swh_error "file not found"
-				printf "\nThis function use linux command \`file\` and \`objdump -p\` scan ${exe[i]} , help you decide proper WINEARCH and dll override\n\n"
-				printf "\n"
+				printf "\nThis function use linux command \`file\` and \`objdump -p\` scan ${exe[i]} , help you decide proper WINEARCH and dll override\nTip: Reports each DLL as it's loaded using Debug Channels: WINEDEBUG=fixme-all,+loaddll\n\n"
 				file "$lfpath"
 				printf "\n"
 				objdump -p "$lfpath" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
@@ -690,23 +690,23 @@ if (( $# > 0 )); then
 		if (( $# == 2 )); then
 			shift
 			case "$1" in
+			cnfonts)
+			#	swh_ww_cnfonts
+				printf "experimental function disabled\n"
+				;;
 			d3dcompiler_42)
 				swh_ww_d3dcompiler_42
 				;;
 			dotnet40)
 			#	swh_ww_dotnet40extract
-				printf "experimental function disabled"
+				printf "experimental function disabled\n"
 				;;
 			dotnet472)
 			#	swh_ww_dotnet472extract
-				printf "experimental function disabled"
+				printf "experimental function disabled\n"
 				;;
 			xact)
 				swh_ww_xact
-				;;
-			cnfonts)
-			#	swh_ww_cnfonts
-				printf "experimental function disabled"
 				;;
 			*)
 				swh_error "unknown arguement."
@@ -745,14 +745,13 @@ if (( $# > 0 )); then
 Remove wine programs from your open with list?\n\
   Continue with the following commands?\n\n\
 rm -f ~/.local/share/mime/packages/x-wine*\n\
-rm -f ~/.local/share/mime/packages/x-wine*\n\
 rm -f ~/.local/share/applications/wine-extension*\n\
 rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*\n\
 rm -f ~/.local/share/mime/application/x-wine-extension*\n\
 \n\
 "
 		read -r -p '(y/n)' temp_var
-		{ [ X"$cow_input" == X'Y' ] || [ X"$cow_input" == X'y' ] ; } && \
+		{ [ X"$temp_var" == X'Y' ] || [ X"$temp_var" == X'y' ] ; } && \
 			{
 				\rm -f ~/.local/share/mime/packages/x-wine*;
 				\rm -f ~/.local/share/applications/wine-extension*;
