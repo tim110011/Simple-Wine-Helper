@@ -2,7 +2,7 @@
 # shellcheck disable=2154
 set -e
 
-SWH_VERSION=2.6.4
+SWH_VERSION=2.7.0
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -37,8 +37,8 @@ swh_config()  # swh default value, modify me
 	export cellar="$HOME/swh/cellar"				# store wine here
 	export table="$HOME/swh/table"					# wineprefix dirs cluster
 	export drives="$HOME/swh/drives"				# wine drives dir
-	#export WINEDEBUG=fixme-all,+loaddll,+tid
-	export WINEDEBUG=fixme-all
+	#export WINEDEBUG=+loaddll,+tid
+	export WINEDEBUG=fixme-all,+tid
 }
 
 swh_error()
@@ -55,7 +55,7 @@ swh_pause()
 
 swh_check_dependencies()
 {
-	{ command -v winetricks >/dev/null; } || { printf "WARN: winetricks not installed!"; swh_pause; }
+	{ command -v winetricks >/dev/null; } || { printf "WARN: winetricks not found!"; swh_pause; }
 }
 
 swh_storewine()
@@ -280,168 +280,226 @@ __EOF__
 	rm -rf "$swh_tempdir"
 }
 
-# xact, 32bit and 64bit
-swh_ww_xact()
+## extract vcrun2015
+swh_ww_vcrun2015()
 {
 	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
 	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
-	verbfile='swh_ww_xact.verb'
+	verbfile='swh_x_vcrun2015.verb'
 	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
-w_metadata swh_ww_xact dlls \
-	title="MS XACT Engine (Simple Wine Helper)" \
-	publisher="Microsoft" \
-	year="2010" \
-	media="download" \
-	file1="../directx9/directx_Jun2010_redist.exe" \
-	installed_file1="$W_SYSTEM32_DLLS_WIN/xactengine2_0.dll"
+w_metadata vcrun2015 dlls \
+    title="Visual C++ 2015 libraries (concrt140.dll,mfc140.dll,mfc140u.dll,mfcm140.dll,mfcm140u.dll,msvcp140.dll,vcamp140.dll,vccorlib140.dll,vcomp140.dll,vcruntime140.dll)" \
+    publisher="Microsoft" \
+    year="2015" \
+    media="download" \
+    conflicts="vcrun2017" \
+    file1="vc_redist.x86.exe" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/mfc140.dll"
 
-load_swh_ww_xact()
+load_vcrun2015()
 {
-	helper_directx_Jun2010
+    # https://www.microsoft.com/en-us/download/details.aspx?id=48145
+    # 2015/10/12: fdd1e1f0dcae2d0aa0720895eff33b927d13076e64464bb7c7e5843b7667cd14
+    w_download https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x86.exe fdd1e1f0dcae2d0aa0720895eff33b927d13076e64464bb7c7e5843b7667cd14
 
-	rm -rf "$W_TMP"/cab
-	mkdir -p "$W_TMP"/cab
-	cabcab=(*XACT_x* *XAudio_x* *X3DAudio_x*)
-	for (( i=0; i < ${#cabcab[*]}; i++ )); do
-		cabextract -q -d "$W_TMP"/cab -L -F ${cabcab[i]} "$W_CACHE/directx9/$DIRECTX_NAME"
-	done
+    if w_workaround_wine_bug 37781; then
+        w_warn "This may fail in non-XP mode, see https://bugs.winehq.org/show_bug.cgi?id=37781"
+    fi
 
-	rm -rf "$W_TMP"/32
-	mkdir -p "$W_TMP"/32
-	for cab32 in "$W_TMP"/cab/*_x86.cab ; do
-		cabextract -q -d "$W_TMP"/32 -L -F '*.dll' "$cab32"
-	done
-	cp -f "$W_TMP"/32/* "$W_SYSTEM32_DLLS"
-	for swh_dllname in $( ls -1 "$W_TMP"/32 | sed -En 's/\.dll$//gp' ); do
-		w_override_dlls native $swh_dllname
-	done
-	rm -rf "$W_TMP"/32
+    w_override_dlls native api_ms_win_core_datetime_l1_1_0.dll api_ms_win_core_debug_l1_1_0.dll api_ms_win_core_errorhandling_l1_1_0.dll api_ms_win_core_file_l1_1_0.dll api_ms_win_core_file_l1_2_0.dll api_ms_win_core_file_l2_1_0.dll api_ms_win_core_handle_l1_1_0.dll api_ms_win_core_heap_l1_1_0.dll api_ms_win_core_interlocked_l1_1_0.dll api_ms_win_core_libraryloader_l1_1_0.dll api_ms_win_core_localization_l1_2_0.dll api_ms_win_core_memory_l1_1_0.dll api_ms_win_core_namedpipe_l1_1_0.dll api_ms_win_core_processenvironment_l1_1_0.dll api_ms_win_core_processthreads_l1_1_0.dll api_ms_win_core_processthreads_l1_1_1.dll api_ms_win_core_profile_l1_1_0.dll api_ms_win_core_rtlsupport_l1_1_0.dll api_ms_win_core_string_l1_1_0.dll api_ms_win_core_synch_l1_1_0.dll api_ms_win_core_synch_l1_2_0.dll api_ms_win_core_sysinfo_l1_1_0.dll api_ms_win_core_timezone_l1_1_0.dll api_ms_win_core_util_l1_1_0.dll api_ms_win_crt_conio_l1_1_0.dll api_ms_win_crt_convert_l1_1_0.dll api_ms_win_crt_environment_l1_1_0.dll api_ms_win_crt_filesystem_l1_1_0.dll api_ms_win_crt_heap_l1_1_0.dll api_ms_win_crt_locale_l1_1_0.dll api_ms_win_crt_math_l1_1_0.dll api_ms_win_crt_multibyte_l1_1_0.dll api_ms_win_crt_private_l1_1_0.dll api_ms_win_crt_process_l1_1_0.dll api_ms_win_crt_runtime_l1_1_0.dll api_ms_win_crt_stdio_l1_1_0.dll api_ms_win_crt_string_l1_1_0.dll api_ms_win_crt_time_l1_1_0.dll api_ms_win_crt_utility_l1_1_0.dll concrt140.dll mfc140chs.dll mfc140cht.dll mfc140deu.dll mfc140.dll mfc140enu.dll mfc140esn.dll mfc140fra.dll mfc140ita.dll mfc140jpn.dll mfc140kor.dll mfc140rus.dll mfc140u.dll mfcm140.dll mfcm140u.dll msvcp140.dll ucrtbase.dll vcamp140.dll vccorlib140.dll vcomp140.dll vcruntime140.dll
 
-	if test "$W_ARCH" = "win64" ; then
-		rm -rf "$W_TMP"/64
-		mkdir -p "$W_TMP"/64
-		for cab64 in "$W_TMP"/cab/*_x64.cab ; do
-			cabextract -q -d "$W_TMP"/64 -L -F '*.dll' "$cab64"
-		done
-		cp -f "$W_TMP"/64/* "$W_SYSTEM64_DLLS"
-		for swh_dllname in $( ls -1 "$W_TMP"/64 | sed -En 's/\.dll$//gp' ); do
-			w_override_dlls native $swh_dllname
-		done
-		rm -rf "$W_TMP"/64
-	fi
+    w_set_winver winxp
 
-	rm -rf "$W_TMP"/cab
+    w_try_cd "$W_CACHE"/"$W_PACKAGE"
+    w_try "$WINE" vc_redist.x86.exe $W_UNATTENDED_SLASH_Q
+
+    case "$W_ARCH" in
+        win64)
+            # Also install the 64-bit version
+            # 2015/10/12: 5eea714e1f22f1875c1cb7b1738b0c0b1f02aec5ecb95f0fdb1c5171c6cd93a3
+            w_download https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x64.exe 5eea714e1f22f1875c1cb7b1738b0c0b1f02aec5ecb95f0fdb1c5171c6cd93a3
+            if w_workaround_wine_bug 30713 "Manually extracting the 64-bit dlls"; then
+                rm -f "$W_TMP"/*  # Avoid permission error
+                rm -f "$W_TMP"/tmpdir_vcrun2015/*
+                w_try_cabextract --directory="$W_TMP" vc_redist.x64.exe
+                w_try_cabextract --directory="$W_TMP"/tmpdir_vcrun2015 "$W_TMP/a10"
+                w_try_cabextract --directory="$W_TMP"/tmpdir_vcrun2015 "$W_TMP/a11"
+                for f in "$W_TMP"/tmpdir_vcrun2015/*.dll; do
+                    \cp -rfv "$f" "$W_SYSTEM64_DLLS"
+                    "$WINE" reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$f" /f
+                done
+            else
+                w_try "$WINE" vc_redist.x64.exe $W_UNATTENDED_SLASH_Q
+            fi
+            ;;
+    esac
 }
 __EOF__
 	winetricks "$swh_tempdir/$verbfile"
 	rm -rf "$swh_tempdir"
 }
 
-# Chinese fonts replacement: use source fonts
-swh_ww_cnfonts()
+## extract vcrun2017
+swh_ww_vcrun2017()
 {
 	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
 	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
-	verbfile='swh_ww_cnfonts.verb'
+	verbfile='swh_x_vcrun2017.verb'
 	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
-w_metadata swh_ww_cnfonts fonts \
-    title="Creates aliases for Chinese fonts using Source Han Sans and Source Han Serif" \
-    publisher="Adobe, Google" \
-    year="2014, 2017"
+w_metadata vcrun2017 dlls \
+    title="Visual C++ 2017 libraries (concrt140.dll,mfc140.dll,mfc140u.dll,mfcm140.dll,mfcm140u.dll,msvcp140.dll,vcamp140.dll,vccorlib140.dll,vcomp140.dll,vcruntime140.dll)" \
+    publisher="Microsoft" \
+    year="2017" \
+    media="download" \
+    conflicts="vcrun2015" \
+    file1="VC_redist.x86.exe" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/mfc140.dll"
 
-load_swh_ww_cnfonts()
+# FIXME: There's a conflict with vcrun2015 because the dll's version number for 2017 and 2015 are the same. Correct behavior should be compared to native Windows.
+load_vcrun2017()
 {
-    # Reference : https://en.wikipedia.org/wiki/Source_Han_Sans
-    # https://en.wikipedia.org/wiki/Source_Han_Serif
+    # https://go.microsoft.com/fwlink/?LinkId=746571
+    # 2017/10/02: 2da11e22a276be85970eaed255daf3d92af84e94142ec04252326a882e57303e
+    w_download https://download.visualstudio.microsoft.com/download/pr/11100229/78c1e864d806e36f6035d80a0e80399e/VC_redist.x86.exe 2da11e22a276be85970eaed255daf3d92af84e94142ec04252326a882e57303e
 
-    sdir=(/usr/share/fonts /usr/local/share/fonts $HOME/.fonts)
-    idir='missing'
-    for (( i=0; i < ${#sdir[*]}; i++ )); do
-        if [ -f ${sdir[i]}/adobe-source-han-sans-cn/SourceHanSansCN-Regular.otf ]; then
-            idir=${sdir[i]}
-        fi
-    done
-
-    if ! [ -f $idir/adobe-source-han-sans-cn/SourceHanSansCN-Regular.otf ]; then
-        w_die "SourceHanSansCN-Regular.otf not found."
-    fi
-    if ! [ -f $idir/adobe-source-han-serif-cn/SourceHanSerifCN-Regular.otf ]; then
-        w_die "SourceHanSerifCN-Regular.otf not found."
-    fi
-    if ! [ -f $idir/adobe-source-han-sans-tw/SourceHanSansTW-Regular.otf ]; then
-        w_die "SourceHanSansTW-Regular.otf not found."
-    fi
-    if ! [ -f $idir/adobe-source-han-serif-tw/SourceHanSerifTW-Regular.otf ]; then
-        w_die "SourceHanSerifTW-Regular.otf not found."
+    if w_workaround_wine_bug 37781; then
+        w_warn "This may fail in non-XP mode, see https://bugs.winehq.org/show_bug.cgi?id=37781"
     fi
 
-    content_dir=(adobe-source-han-sans-cn adobe-source-han-sans-tw adobe-source-han-serif-cn adobe-source-han-serif-tw)
-    for (( i=0; i < ${#content_dir[*]}; i++ )); do
-        w_try_cp_font_files "$idir/${content_dir[i]}" "$W_FONTSDIR_UNIX" "*.otf"
-    done
-    w_register_font SourceHanSansCN-Regular.otf "Source Han Sans CN"
-    w_register_font SourceHanSerifCN-Regular.otf "Source Han Serif CN"
-    w_register_font SourceHanSansTW-Regular.otf "Source Han Sans TW"
-    w_register_font SourceHanSerifTW-Regular.otf "Source Han Serif TW"
-    w_register_font_replacement "FangSong" "Source Han Serif CN"
-    w_register_font_replacement "Microsoft YaHei" "Source Han Sans CN"
-    w_register_font_replacement "NSimSun" "Source Han Serif CN"
-    w_register_font_replacement "SimHei" "Source Han Sans CN"
-    w_register_font_replacement "SimKai" "Source Han Serif CN"
-    w_register_font_replacement "SimSun" "Source Han Serif CN"
-    w_register_font_replacement "SimSun-ExtB" "Source Han Serif CN"
-    w_register_font_replacement "KaiTi" "Source Han Serif CN"
-    w_register_font_replacement "Microsoft YaHei UI" "Source Han Sans CN"
-    w_register_font_replacement "Dengxian" "Source Han Sans CN"
-    w_register_font_replacement "DFKai-SB" "Source Han Serif TW"
-    w_register_font_replacement "Microsoft JhengHei" "Source Han Sans TW"
-    w_register_font_replacement "MingLiU" "Source Han Serif TW"
-    w_register_font_replacement "PMingLiU" "Source Han Serif TW"
-    w_register_font_replacement "MingLiU-ExtB" "Source Han Sans TW"
-    w_register_font_replacement "PMingLiU-ExtB" "Source Han Sans TW"
-    w_register_font_replacement "Microsoft JhengHei UI" "Source Han Sans TW"
+    w_override_dlls native api_ms_win_core_console_l1_1_0.dll api_ms_win_core_datetime_l1_1_0.dll api_ms_win_core_debug_l1_1_0.dll api_ms_win_core_errorhandling_l1_1_0.dll api_ms_win_core_file_l1_1_0.dll api_ms_win_core_file_l1_2_0.dll api_ms_win_core_file_l2_1_0.dll api_ms_win_core_handle_l1_1_0.dll api_ms_win_core_heap_l1_1_0.dll api_ms_win_core_interlocked_l1_1_0.dll api_ms_win_core_libraryloader_l1_1_0.dll api_ms_win_core_localization_l1_2_0.dll api_ms_win_core_memory_l1_1_0.dll api_ms_win_core_namedpipe_l1_1_0.dll api_ms_win_core_processenvironment_l1_1_0.dll api_ms_win_core_processthreads_l1_1_0.dll api_ms_win_core_processthreads_l1_1_1.dll api_ms_win_core_profile_l1_1_0.dll api_ms_win_core_rtlsupport_l1_1_0.dll api_ms_win_core_string_l1_1_0.dll api_ms_win_core_synch_l1_1_0.dll api_ms_win_core_synch_l1_2_0.dll api_ms_win_core_sysinfo_l1_1_0.dll api_ms_win_core_timezone_l1_1_0.dll api_ms_win_core_util_l1_1_0.dll api_ms_win_crt_conio_l1_1_0.dll api_ms_win_crt_convert_l1_1_0.dll api_ms_win_crt_environment_l1_1_0.dll api_ms_win_crt_filesystem_l1_1_0.dll api_ms_win_crt_heap_l1_1_0.dll api_ms_win_crt_locale_l1_1_0.dll api_ms_win_crt_math_l1_1_0.dll api_ms_win_crt_multibyte_l1_1_0.dll api_ms_win_crt_private_l1_1_0.dll api_ms_win_crt_process_l1_1_0.dll api_ms_win_crt_runtime_l1_1_0.dll api_ms_win_crt_stdio_l1_1_0.dll api_ms_win_crt_string_l1_1_0.dll api_ms_win_crt_time_l1_1_0.dll api_ms_win_crt_utility_l1_1_0.dll concrt140.dll mfc140chs.dll mfc140cht.dll mfc140deu.dll mfc140.dll mfc140enu.dll mfc140esn.dll mfc140fra.dll mfc140ita.dll mfc140jpn.dll mfc140kor.dll mfc140rus.dll mfc140u.dll mfcm140.dll mfcm140u.dll msvcp140.dll ucrtbase.dll vcamp140.dll vccorlib140.dll vcomp140.dll vcruntime140.dll
+
+    w_set_winver winxp
+
+    w_try_cd "$W_CACHE/$W_PACKAGE"
+    w_try "$WINE" VC_redist.x86.exe $W_UNATTENDED_SLASH_Q
+
+    case "$W_ARCH" in
+        win64)
+            # Also install the 64-bit version
+            # https://go.microsoft.com/fwlink/?LinkId=746572
+            # 2017/10/02: 7434bf559290cccc3dd3624f10c9e6422cce9927d2231d294114b2f929f0e465
+            w_download https://download.visualstudio.microsoft.com/download/pr/11100230/15ccb3f02745c7b206ad10373cbca89b/VC_redist.x64.exe 7434bf559290cccc3dd3624f10c9e6422cce9927d2231d294114b2f929f0e465
+            if w_workaround_wine_bug 30713 "Manually extracting the 64-bit dlls"; then
+                rm -f "$W_TMP"/*  # Avoid permission error
+                rm -f "$W_TMP"/tmpdir_vcrun2017/*
+                w_try_cabextract --directory="$W_TMP" VC_redist.x64.exe
+                w_try_cabextract --directory="$W_TMP"/tmpdir_vcrun2017 "$W_TMP/a10"
+                w_try_cabextract --directory="$W_TMP"/tmpdir_vcrun2017 "$W_TMP/a11"
+                for f in "$W_TMP"/tmpdir_vcrun2017/*.dll; do
+                    \cp -rfv "$f" "$W_SYSTEM64_DLLS"
+                    "$WINE" reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$f" /f
+                done
+            else
+                w_try "$WINE" VC_redist.x64.exe $W_UNATTENDED_SLASH_Q
+            fi
+            ;;
+    esac
 }
 __EOF__
 	winetricks "$swh_tempdir/$verbfile"
 	rm -rf "$swh_tempdir"
 }
 
-# faudio_install is set in launcher
-swh_faudio()
+# 3rd party dll package: dxvk, faudio
+# usage : swh_3rd pakname command arguement 
+# 	pakname: { dxvk, faudio }
+# 	command: { install, uninstall }
+#	arguement: --without-dxgi 		# use with dxvk 	https://github.com/doitsujin/dxvk
+# install dir should contain these dir(s): "x86" "x64"
+
+swh_3rdpak()
 {
-	{ [ X"$runner" == X'wine' ] || [ X"$runner" == X'wine64' ] ; } || swh_error "${FUNCNAME[0]}: wrong value in \$runner"
+	{ [ X"$runner" == X'wine' ] || [ X"$runner" == X'wine64' ] ; } || swh_error "${FUNCNAME[0]}: wrong value in \$runner "
 
-	[ -d "$faudio_install/x32" ] || swh_error "${FUNCNAME[0]}: 32bit FAudio files not found." 
-	{ [ X"$WINEARCH" == X"win64" ] && [ -d "$faudio_install/x64" ] ; } || swh_error "${FUNCNAME[0]}: 64bit FAudio files not found"
+	local pakname="$1"
+	local cmd="$2"
+	local arg="$3"
 
-	case "$WINEARCH" in
-		win32)
-			for f in "$faudio_install"/x32/*.dll; do
-				\cp -rfv "$f" "$WINEPREFIX/drive_c/windows/system32"
-			done
+	case $pakname in
+		dxvk)
+			local idir="$dxvk_install"
 			;;
-		win64)
-			for f in "$faudio_install"/x32/*.dll; do
-				\cp -rfv "$f" "$WINEPREFIX/drive_c/windows/syswow64"
-			done
-			for f in "$faudio_install"/x64/*.dll; do
-				\cp -rfv "$f" "$WINEPREFIX/drive_c/windows/system32"
-			done
+		faudio)
+			local idir="$faudio_install"
 			;;
 		*)
-			swh_error "${FUNCNAME[0]}: wrong value in \$WINEARCH"
+			swh_error "${FUNCNAME[0]}: unknown 3rd party dll package name. currently supported: dxvk, faudio"
 			;;
 	esac
 
-	readarray -t ar<<<"$( find "$faudio_install/x32" -mindepth 1 -maxdepth 1 -type f -name '*.dll' -print | sort | sed -En 's/^.*\///g; s/\.dll$//gp' )"
-	for (( i=0; i<${#ar[@]}; i++ )); do
-		"$runner" reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /d native /f
-	done
+	ls -1 "$idir"/x32/*.dll > /dev/null 2>&1 || swh_error "${FUNCNAME[0]}: 32bit $pakname dll not found."
+	if [ X"$WINEARCH" == X"win64" ]; then
+		ls -1 "$idir"/x64/*.dll > /dev/null 2>&1 || swh_error "${FUNCNAME[0]}: 64bit $pakname dll not found."
+	fi
+
+	case $WINEARCH in
+		win32)
+			local dll32_path="$WINEPREFIX"/drive_c/windows/system32
+			;;
+		win64)
+			local dll32_path="$WINEPREFIX"/drive_c/windows/syswow64
+			local dll64_path="$WINEPREFIX"/drive_c/windows/system32
+			;;
+	esac
+
+	# generate file list, dir x32 and x64 must contain same name dll files
+	local -a ar
+	readarray -t ar<<<"$( find "$idir"/x32 -mindepth 1 -maxdepth 1 -type f -name '*.dll' | sed -En 's/^.*\///gp' )"
+
+	case $cmd in
+		i | install)
+			local -i i
+			for (( i=0; i<${#ar[@]}; i++ )); do
+				[ -f "$dll32_path"/"${ar[i]}" ] || swh_error "${FUNCNAME[0]}: original dll $pakname not found."
+				! [ -f "$dll32_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
+				\mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
+				ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
+				"$runner" reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /d native /f
+			done
+			if [ X"$WINEARCH" == X"win64" ]; then
+				for (( i=0; i<${#ar[@]}; i++ )); do
+					[ -f "$dll64_path"/"${ar[i]}" ] || swh_error "${FUNCNAME[0]}: original dll $pakname not found."
+					! [ -f "$dll64_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
+					\mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
+					ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"	
+				done
+			fi
+			# install dxvk 1.0 --without-dxgi
+			if ( [ X"$pakname" == X"dxvk" ] && [ X"$arg" == X"--without-dxgi" ] ); then
+				\mv -f "$dll32_path"/dxgi.dll."$pakname" "$dll32_path"/dxgi.dll
+				"$runner" reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f
+				if [ X"$WINEARCH" == X"win64" ]; then
+					\mv -f "$dll64_path"/dxgi.dll."$pakname" "$dll64_path"/dxgi.dll
+				fi
+			fi
+			;;
+		u | uninstall)
+			local -i i
+			for (( i=0; i<${#ar[@]}; i++ )); do
+				if [ -f "$dll32_path"/"${ar[i]}"."$pakname" ]; then
+					\mv -f "$dll32_path"/"${ar[i]}"."$pakname" "$dll32_path"/"${ar[i]}"
+					"$runner" reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /f
+					if [ X"$WINEARCH" == X"win64" ]; then
+						\mv -f "$dll64_path"/"${ar[i]}"."$pakname" "$dll64_path"/"${ar[i]}"
+					fi
+				fi
+			done
+			;;
+		*)
+			swh_error "${FUNCNAME[0]}: unknown command, supported command: install, uninstall"
+			;;
+	esac
+
+	unset pakname
+	unset cmd
+	unset arg
+	unset idir
+	unset ar
+	unset i
 }
 
 swh_objdump()
 {
-	
 	if (( $# == 1 )); then
 		case "$1" in
 			[1-9] | [1-9][0-9])
@@ -455,7 +513,7 @@ swh_objdump()
 				ldf="$( echo "$wpath" | cut -d : -f 2- | tr $'\\' '/' )"
 				lfpath="$WINEPREFIX"/dosdevices/"$ldrv":"$ldf"
 				[ -f "$lfpath" ] || swh_error "file not found"
-				printf "\nThis function use linux command \`file\` and \`objdump -p\` scan ${exe[i]} , help you decide proper WINEARCH and dll override\nTip: Reports each DLL as it's loaded using Debug Channels: WINEDEBUG=fixme-all,+loaddll\n\n"
+				printf "\nThis function use linux command \`file\` and \`objdump -p\` scan %s , help you decide proper WINEARCH and dll override\nTip: Reports each DLL as it's loaded using Debug Channels: WINEDEBUG=fixme-all,+loaddll\n\n" "${exe[i]}"
 				file "$lfpath"
 				printf "\n"
 				objdump -p "$lfpath" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
@@ -471,6 +529,30 @@ swh_objdump()
 	else
 		swh_error "wrong arguement count"
 	fi
+}
+
+# clean open with list
+swh_cowl()
+{
+	printf "\
+\n\
+Remove wine programs from your open with list?\n\
+  Continue with the following commands?\n\n\
+rm -f ~/.local/share/mime/packages/x-wine*\n\
+rm -f ~/.local/share/applications/wine-extension*\n\
+rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*\n\
+rm -f ~/.local/share/mime/application/x-wine-extension*\n\
+\n\
+"
+	read -r -p '(y/n)' temp_var
+	{ [ X"$temp_var" == X'Y' ] || [ X"$temp_var" == X'y' ] ; } && \
+		{
+			\rm -f ~/.local/share/mime/packages/x-wine*;
+			\rm -f ~/.local/share/applications/wine-extension*;
+			\rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*;
+			\rm -f ~/.local/share/mime/application/x-wine-extension*;
+		}
+	unset temp_var
 }
 
 swh_help()
@@ -494,14 +576,16 @@ l [application]             Launch specified application: see Examples below
 99                          Launch 99th application, swh now supports up to 99 apps in one launcher!
 w [winetricks command]      winetricks command
 ww [swh command]            swh command, these commands need winetricks as dependency, but they are NOT winetricks command
-  ww cnfonts                    (EXPERIMENTIAL FUNCTION) use source fonts to replace chinese fonts
   ww d3dcompiler_42             install d3dcompiler_42, 32bit and 64bit
-  ww xact                       install xact full suit, 32bit and 64bit
-  ww dotnet40                   (EXPERIMENTIAL FUNCTION) extract dotnet40 files only, on 64bit prefix
-  ww dotnet472                  (EXPERIMENTIAL FUNCTION) extract dotnet472 files only, on 64bit prefix. use this after using ww dotnet40
-oldvk                       Setup DXVK 0.5x, 0.6x
-vk                          Setup DXVK 0.7x, 0.8x, 0.9x
-faudio                      Setup FAudio, see comment in launcher
+  ww dotnet40                   (EXPERIMENTIAL FUNCTION) Extract dotnet40 files only, on 64bit prefix
+  ww dotnet472                  (EXPERIMENTIAL FUNCTION) Extract dotnet472 files only, on 64bit prefix. use this after using ww dotnet40
+  ww vcrun2015                  (EXPERIMENTIAL FUNCTION) Extract and override vcrun2015 files on 64bit prefix
+  ww vcrun2017                  (EXPERIMENTIAL FUNCTION) Extract and override vcrun2017 files on 64bit prefix
+3rd dxvk i 					Install dxvk 0.5x 0.6x 0.7x 0.8x 0.9x 1.0 ( create symbolic link )
+3rd dxvk i --without-dxgi 	Same as above, without-dxgi see https://github.com/doitsujin/dxvk
+3rd dxvk u 					Uninstall dxvk
+3rd faudio i 				Install faudio
+3rd faudio u 				Uninstall faudio
 cleanopenwith | cow         Clean the Open With List
 NO ARGUEMENT                Show a small menu
 
@@ -510,6 +594,7 @@ Examples:
   APP_LAUNCHER l cmd                Run wine cmd
   APP_LAUNCHER w d3dcompiler_47     This is a winetricks command, it installs d3dcompiler_47 override
   APP_LAUNCHER ww d3dcompiler_42    This is a swh command, it installs d3dcompiler_42 override
+  APP_LAUNCHER 3rd dxvk i 		    This is a swh command, it installs d3dcompiler_42 override
 
 Quick Guide:
 1. Install wine into a SEPERATE directory:
@@ -551,8 +636,11 @@ Quick Guide:
 10. Launch 2nd application: APP_LAUNCHER 2
 
 NOTE:
+0. The above guide about install steam client may be obsoleted, just give you a hint: install software outside drive c: means it is seperated from wineprefix dir
 1. Using winetricks: "Select the default wineprefix" means select THIS wineprefix
 2. This script is used per user, not "Install on this machine for everyone" because many command use username as arguement
+3. Get dxvk binary release from https://github.com/doitsujin/dxvk/releases
+4. wine-4.3 already include faudio, when using older version wine, get faudio binary release from https://github.com/Kron4ek/FAudio-Builds/releases
 __EOF__
 }
 
@@ -690,75 +778,41 @@ if (( $# > 0 )); then
 		if (( $# == 2 )); then
 			shift
 			case "$1" in
-			cnfonts)
-			#	swh_ww_cnfonts
-				printf "experimental function disabled\n"
-				;;
-			d3dcompiler_42)
-				swh_ww_d3dcompiler_42
-				;;
-			dotnet40)
-			#	swh_ww_dotnet40extract
-				printf "experimental function disabled\n"
-				;;
-			dotnet472)
-			#	swh_ww_dotnet472extract
-				printf "experimental function disabled\n"
-				;;
-			xact)
-				swh_ww_xact
-				;;
-			*)
-				swh_error "unknown arguement."
-				;;
+				d3dcompiler_42)
+					swh_ww_d3dcompiler_42
+					;;
+				dotnet40)
+					swh_ww_dotnet40extract
+					;;
+				dotnet472)
+					swh_ww_dotnet472extract
+					;;
+				vcrun2015)
+					swh_ww_vcrun2015
+					;;
+				vcrun2017)
+					swh_ww_vcrun2017
+					;;
+				*)
+					swh_error "unknown arguement."
+					;;
 			esac
 		else
 			swh_error "wrong arguement."
 		fi
 		;;
-	oldvk)
+	3rd | 3rdpak)
 		swh_init
 		swh_checkprefix
-		printf "installing 32bit old DXVK0.5x/0.6x...\n"
-		cd "$dxvk_install"/x32
-		bash setup_dxvk.sh
-		if [ X"$WINEARCH" == X"win64" ]; then
-			printf "installing 64bit old DXVK0.5x/0.6x...\n"
-			cd "$dxvk_install"/x64
-			bash setup_dxvk.sh
+		if [[ (( $# == 3 )) || (( $# == 4 )) ]]; then
+			shift
+			swh_3rdpak "$1" "$2" "$3"
+		else
+			swh_error "wrong arguement number."
 		fi
 		;;
-	vk)
-		swh_init
-		swh_checkprefix
-		cd "$dxvk_install"
-		winetricks --force setup_dxvk.verb
-		;;
-	faudio)
-		swh_init
-		swh_checkprefix
-		swh_faudio
-		;;
-	cleanopenwith | cow)
-		printf "\
-\n\
-Remove wine programs from your open with list?\n\
-  Continue with the following commands?\n\n\
-rm -f ~/.local/share/mime/packages/x-wine*\n\
-rm -f ~/.local/share/applications/wine-extension*\n\
-rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*\n\
-rm -f ~/.local/share/mime/application/x-wine-extension*\n\
-\n\
-"
-		read -r -p '(y/n)' temp_var
-		{ [ X"$temp_var" == X'Y' ] || [ X"$temp_var" == X'y' ] ; } && \
-			{
-				\rm -f ~/.local/share/mime/packages/x-wine*;
-				\rm -f ~/.local/share/applications/wine-extension*;
-				\rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*;
-				\rm -f ~/.local/share/mime/application/x-wine-extension*;
-			}
-		unset temp_var
+	cleanopenwithlist | cowl | cow)
+		swh_cowl
 		;;
 	objdump | od)
 		swh_init
