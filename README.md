@@ -16,6 +16,10 @@
  **Thanks**
  * koalaman's [ShellCheck](https://github.com/koalaman/shellcheck) , this tool helps me check bash script for error.
 
+ **2.7.0 Update Notes**
+* (1) use generic function install dxvk and faudio binary release package
+* (2) new experimental function: extract vcrun2015 vcrun2017 files
+
  **2.6.0 Upgrade Notes**
 * (1) Old launchers not supported. Please remake all old launchers. (I suggest use meld to compare two files)
 * (2) Default storage dir changed, see swh_config() in swh. Re-config or move existing $cellar and $table dir.
