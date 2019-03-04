@@ -5,14 +5,13 @@
  **Feature**
 * Manage multiple wine binary releases
 * Manage multiple wineprefix directories
-* Work with distro (now only Fedora) package manager (dnf)
+* Work with distro package manager if it will install winehq to /opt
 * Use with winehq repository binary package or your own build
-* Work with [DXVK](https://github.com/doitsujin/dxvk) binary release setup script
-* Support Kron4ek's [FAudio MinGW (dlls) builds for Wine](https://github.com/Kron4ek/FAudio-Builds)
+* Support [DXVK](https://github.com/doitsujin/dxvk) binary release package 0.5x-1.0
+* Support Kron4ek's [FAudio MinGW (dlls) builds for Wine](https://github.com/Kron4ek/FAudio-Builds) binary release package
 * Added "Clean the Open With List" function
 * Work with [winetricks](https://wiki.winehq.org/Winetricks), the following functions use winetricks verb feature:
 * Install d3dcompiler_42
-* Install FULL XACT override
 
  **Thanks**
  * koalaman's [ShellCheck](https://github.com/koalaman/shellcheck) , this tool helps me check bash script for error.
