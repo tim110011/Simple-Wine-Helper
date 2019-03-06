@@ -15,7 +15,7 @@ export WINEARCH=win64						# win32 or win64. arch of your wineprefix. must expor
 export WINEDEBUG=fixme-all,+tid 			# set WINEDEBUG channels here will override swh default settings
 
 #invoker="strace"										# { primusrun; perf recored; strace } comment this line out if not debugging
-#invoker_argsstr="-e trace=open,openat"					# use eval to evaluate invoker arguments in a string
+#invoker_argsstr="-e trace=open,openat"					# all arguments in this string
 
 runner=wine											# wine, wine64, winedbg
 
