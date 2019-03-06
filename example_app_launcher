@@ -1,19 +1,22 @@
 #!/bin/bash
 set -e
 
-SWH_LAUNCHER_VERSION=2.7.0
+SWH_LAUNCHER_VERSION=2.7.1
 { command -v swh >/dev/null; } || { printf "ERROR: swh is not installed or is not executable.\nIt is suggested place swh in %s/bin and add\n  PATH=\$PATH:%s/bin\n  PATH\nto your .bashrc file.\n" "$PWD" "$HOME"; exit 1; }
 
 ## Example Application
 # your app's special walkaround
 
 prefix='example'							# give a unique name to your wineprefix
-build='4.3'									# this is the dir name in cellar, provided by winehq or your own build.
-install='/opt/wine-devel'					# '/opt/wine-stable', '/opt/wine-devel' or '/opt/wine-staging', used for store official winehq (on fedora or maybe your distro) to $cellar(default location is "$HOME/swh/cellar"). For your own built wine, copy it into $cellar
+build='4.3-staging'							# this is the dir name in cellar, provided by winehq or your own build.
+install='/opt/wine-staging'					# { '/opt/wine-stable' ; '/opt/wine-devel' ; '/opt/wine-staging' } winehq must be installed in /opt to be supported by swh s command: copy winehq from /opt to $cellar. For your own build, copy it into $cellar
 build_arch=win64							# win32 or win64. arch of your installed/built wine pagkage. when set to win64, you can create 32bit prefix by set WINEARCH=win32
-export WINEARCH=win64								# win32 or win64. arch of your wineprefix. must export this variable
+export WINEARCH=win64						# win32 or win64. arch of your wineprefix. must export this variable
+export WINEDEBUG=fixme-all,+tid 			# set WINEDEBUG channels here will override swh default settings
 
-#invoker=""											# primusrun; perf recored; strace
+#invoker="strace"										# { primusrun; perf recored; strace } comment this line out if not debugging
+#invoker_argsstr="-e trace=open,openat"					# all arguments in this string
+
 runner=wine											# wine, wine64, winedbg
 
 #LC_ALL=zh_CN.utf8									# for non-unicode program, see 'locale -a' command
@@ -27,7 +30,7 @@ dxvk_install="$HOME/0_wine/dxvk/dxvk-1.0"						# extracted DXVK release archive 
 #DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/nv/dxvk.conf" 				# tell dxvk you are using nvidia gpu
 #export WINEDLLOVERRIDES="nvapi.dll,nvapi64.dll=d"
 
-## FAudio setting ( use with wine-4.2 or earlier versions )
+## FAudio setting
 faudio_install="$HOME/0_wine/faudio/faudio-19.03"				# extract FAudio release archive here, build yourself or download https://github.com/Kron4ek/FAudio-Builds/releases
 
 #XMODIFIERS='' 													# Unity Game Keyboard issue walkaround  https://www.gamingonlinux.com/articles/if-you-have-trouble-with-keyboard-input-in-some-unity-games-there-is-a-workaround.12411

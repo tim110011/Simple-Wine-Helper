@@ -2,7 +2,7 @@
 # shellcheck disable=2154
 set -e
 
-SWH_VERSION=2.7.0
+SWH_VERSION=2.7.1
 
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
@@ -37,8 +37,8 @@ swh_config()  # swh default value, modify me
 	export cellar="$HOME/swh/cellar"				# store wine here
 	export table="$HOME/swh/table"					# wineprefix dirs cluster
 	export drives="$HOME/swh/drives"				# wine drives dir
-	#export WINEDEBUG=+loaddll,+tid
-	export WINEDEBUG=fixme-all,+tid
+	#export WINEDEBUG=${WINEDEBUG:=fixme-all,+loaddll,+tid}
+	export WINEDEBUG=${WINEDEBUG:=fixme-all,+tid}
 }
 
 swh_error()
@@ -401,10 +401,10 @@ __EOF__
 }
 
 # 3rd party dll package: dxvk, faudio
-# usage : swh_3rd pakname command arguement 
+# usage : swh_3rd pakname command argument 
 # 	pakname: { dxvk, faudio }
 # 	command: { install, uninstall }
-#	arguement: --without-dxgi 		# use with dxvk 	https://github.com/doitsujin/dxvk
+#	argument: --without-dxgi 		# use with dxvk 	https://github.com/doitsujin/dxvk
 # install dir should contain these dir(s): "x86" "x64"
 
 swh_3rdpak()
@@ -450,26 +450,27 @@ swh_3rdpak()
 		i | install)
 			local -i i
 			for (( i=0; i<${#ar[@]}; i++ )); do
-				[ -f "$dll32_path"/"${ar[i]}" ] || swh_error "${FUNCNAME[0]}: original dll $pakname not found."
 				! [ -f "$dll32_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
-				\mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
+				[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
 				ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
-				"$runner" reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /d native /f
+#FIXME :improve these reg code
+				wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /d native /f 1 >/dev/null
 			done
 			if [ X"$WINEARCH" == X"win64" ]; then
 				for (( i=0; i<${#ar[@]}; i++ )); do
-					[ -f "$dll64_path"/"${ar[i]}" ] || swh_error "${FUNCNAME[0]}: original dll $pakname not found."
 					! [ -f "$dll64_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
-					\mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
-					ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"	
+					[ -f "$dll64_path"/"${ar[i]}" ] && \mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
+					ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"
+					wine64 reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /d native /f 1 >/dev/null
 				done
 			fi
 			# install dxvk 1.0 --without-dxgi
 			if ( [ X"$pakname" == X"dxvk" ] && [ X"$arg" == X"--without-dxgi" ] ); then
 				\mv -f "$dll32_path"/dxgi.dll."$pakname" "$dll32_path"/dxgi.dll
-				"$runner" reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f
+				wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f
 				if [ X"$WINEARCH" == X"win64" ]; then
 					\mv -f "$dll64_path"/dxgi.dll."$pakname" "$dll64_path"/dxgi.dll
+					wine64 reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f 1 >/dev/null
 				fi
 			fi
 			;;
@@ -478,9 +479,10 @@ swh_3rdpak()
 			for (( i=0; i<${#ar[@]}; i++ )); do
 				if [ -f "$dll32_path"/"${ar[i]}"."$pakname" ]; then
 					\mv -f "$dll32_path"/"${ar[i]}"."$pakname" "$dll32_path"/"${ar[i]}"
-					"$runner" reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /f
+					wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /f
 					if [ X"$WINEARCH" == X"win64" ]; then
 						\mv -f "$dll64_path"/"${ar[i]}"."$pakname" "$dll64_path"/"${ar[i]}"
+						wine64 reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /f 1 >/dev/null
 					fi
 				fi
 			done
@@ -523,11 +525,11 @@ swh_objdump()
 				unset lfpath
 				;;
 			*)
-				swh_error "wrong arguement"
+				swh_error "wrong argument"
 				;;
 		esac
 	else
-		swh_error "wrong arguement count"
+		swh_error "wrong argument count"
 	fi
 }
 
@@ -560,7 +562,7 @@ swh_help()
 	cat <<__EOF__
 Simple Wine Helper $SWH_VERSION
 
-Usage: APP_LAUNCHER COMMAND [arguement]
+Usage: APP_LAUNCHER COMMAND [argument]
 
 Commands:
 s                           Store wine to your cellar dir
@@ -587,11 +589,12 @@ ww [swh command]            swh command, these commands need winetricks as depen
 3rd faudio i 				Install faudio
 3rd faudio u 				Uninstall faudio
 cleanopenwith | cow         Clean the Open With List
-NO ARGUEMENT                Show a small menu
+NO argument                Show a small menu
 
 Examples:
   APP_LAUNCHER l 'C:\a b\xy.exe'    Run specified application
-  APP_LAUNCHER l cmd                Run wine cmd
+  APP_LAUNCHER l cmd                Wine cmd
+  APP_LAUNCHER l control            Wine Control Panel
   APP_LAUNCHER w d3dcompiler_47     This is a winetricks command, it installs d3dcompiler_47 override
   APP_LAUNCHER ww d3dcompiler_42    This is a swh command, it installs d3dcompiler_42 override
   APP_LAUNCHER 3rd dxvk i 		    This is a swh command, it installs d3dcompiler_42 override
@@ -602,7 +605,7 @@ Quick Guide:
     wine should be installed in directory like: '/opt/wine-stable', '/opt/wine-devel', '/opt/wine-staging'
     Your distro may install their wine package into non-seperate dir like /usr/bin , this is not supported
   Build wine yourself:
-    modify wine's configure arguement: configure --prefix="SEPERATE_INSTALL_DIR"
+    modify wine's configure argument: configure --prefix="SEPERATE_INSTALL_DIR"
     copy your built wine to \$cellar (default location is '\$HOME/swh/cellar')
     valid winecfg path example: '$HOME/swh/cellar/win64/4.0-rc6-staging/bin/winecfg'
   This directory should contain these dirs: bin lib lib64
@@ -638,7 +641,7 @@ Quick Guide:
 NOTE:
 0. The above guide about install steam client may be obsoleted, just give you a hint: install software outside drive c: means it is seperated from wineprefix dir
 1. Using winetricks: "Select the default wineprefix" means select THIS wineprefix
-2. This script is used per user, not "Install on this machine for everyone" because many command use username as arguement
+2. This script is used per user, not "Install on this machine for everyone" because many command use username as argument
 3. Get dxvk binary release from https://github.com/doitsujin/dxvk/releases
 4. wine-4.3 already include faudio, when using older version wine, get faudio binary release from https://github.com/Kron4ek/FAudio-Builds/releases
 __EOF__
@@ -661,12 +664,16 @@ if (( $# > 0 )); then
 	l)
 		swh_init
 		swh_checkprefix
-		if (( $# != 1 )); then
+		if (( $# >= 2 )); then
 			shift
-			if ! [ -v invoker ]; then
+			if [ -z "$invoker" ]; then
 				"$runner" "$@"
 			else
-				"$invoker" "$runner" "$@"
+				if [ -z "$invoker_argsstr" ]; then
+					"$invoker" "$runner" "$@"
+				else
+					"$invoker" $invoker_argsstr "$runner" "$@"
+				fi
 			fi
 		else
 			swh_help
@@ -676,17 +683,26 @@ if (( $# > 0 )); then
 		swh_init
 		swh_checkprefix
 		i=$1
-		if ! [ -v invoker ]; then
+		# do not quote: $invoker_argsstr ${args[i]}
+		if [ -z "$invoker" ]; then
 			if [ -z "${args[i]}" ]; then
 				"$runner" start /d "${dir[i]}" "${exe[i]}"
 			else
-				"$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
+				"$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
 			fi
 		else
-			if [ -z "${args[i]}" ]; then
-				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
+			if [ -z "$invoker_argsstr" ]; then
+				if [ -z "${args[i]}" ]; then
+					"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
+				else
+					"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
+				fi
 			else
-				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
+				if [ -z "${args[i]}" ]; then
+					"$invoker" $invoker_argsstr "$runner" start /d "${dir[i]}" "${exe[i]}"
+				else
+					"$invoker" $invoker_argsstr "$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
+				fi
 			fi
 		fi
 		;;
@@ -794,11 +810,11 @@ if (( $# > 0 )); then
 					swh_ww_vcrun2017
 					;;
 				*)
-					swh_error "unknown arguement."
+					swh_error "unknown argument."
 					;;
 			esac
 		else
-			swh_error "wrong arguement."
+			swh_error "wrong argument."
 		fi
 		;;
 	3rd | 3rdpak)
@@ -808,7 +824,7 @@ if (( $# > 0 )); then
 			shift
 			swh_3rdpak "$1" "$2" "$3"
 		else
-			swh_error "wrong arguement number."
+			swh_error "wrong argument number."
 		fi
 		;;
 	cleanopenwithlist | cowl | cow)
@@ -830,7 +846,7 @@ if (( $# > 0 )); then
 		;;
 	esac
 else
-	#run launcher without arguement will show menu
+	#run launcher without command will show menu
 	swh_init
 	swh_checkprefix
 	select item in "${exe[@]}" help quit; do
@@ -842,17 +858,26 @@ else
 		if [ X"$item" == X"quit" ]; then
 			break
 		fi
-		if ! [ -v invoker ]; then
+		# do not quote: $invoker_argsstr ${args[i]}
+		if [ -z "$invoker" ]; then
 			if [ -z "${args[i]}" ]; then
 				"$runner" start /d "${dir[i]}" "${exe[i]}"
 			else
-				"$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
+				"$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
 			fi
 		else
-			if [ -z "${args[i]}" ]; then
-				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
+			if [ -z "$invoker_argsstr" ]; then
+				if [ -z "${args[i]}" ]; then
+					"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
+				else
+					"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
+				fi
 			else
-				"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" "${args[i]}"
+				if [ -z "${args[i]}" ]; then
+					"$invoker" $invoker_argsstr "$runner" start /d "${dir[i]}" "${exe[i]}"
+				else
+					"$invoker" $invoker_argsstr "$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
+				fi
 			fi
 		fi
 		break;
