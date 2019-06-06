@@ -2,8 +2,6 @@
 # shellcheck disable=2154
 set -e
 
-SWH_VERSION=2.7.1
-
 # This is a UTF-8 file
 # You should see an o with two dots over it here [ö]
 # You should see a micro (u with a tail) here [µ]
@@ -32,13 +30,19 @@ SWH_VERSION=2.7.1
 #		License along with this program.  If not, see
 #		<https://www.gnu.org/licenses/>.
 
+(( BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2 || BASH_VERSINFO[0] > 4 )) || { printf "This script need bash version 4.2 or higher.\n" >&2; exit 1; }
+
+SWH_VERSION=2.8.0
+
 swh_config()  # swh default value, modify me
 {
 	export cellar="$HOME/swh/cellar"				# store wine here
 	export table="$HOME/swh/table"					# wineprefix dirs cluster
 	export drives="$HOME/swh/drives"				# wine drives dir
+	export windowsfonts="$HOME/swh/Fonts"			# native windows `Fonts` dir
 	#export WINEDEBUG=${WINEDEBUG:=fixme-all,+loaddll,+tid}
 	export WINEDEBUG=${WINEDEBUG:=fixme-all,+tid}
+	export WINEDLLOVERRIDES=${WINEDLLOVERRIDES:=winemenubuilder.exe=}
 }
 
 swh_error()
@@ -49,31 +53,183 @@ swh_error()
 
 swh_pause()
 {
-	read -r -p 'Press any key to continue...' temp_var
-	unset temp_var
+	local __vars
+	read -r -p 'Press any key to continue...' __vars
 }
 
-swh_check_dependencies()
+swh_ckdep()
 {
-	{ command -v winetricks >/dev/null; } || { printf "WARN: winetricks not found!"; swh_pause; }
+	local -i __vari=0
+	while [ -n "$1" ]; do
+		if ! { command -v "$1" >/dev/null 2>&1; }; then
+			 __vari+=1
+			 printf "missing dependency: %s\n" "$1"
+		fi
+		shift
+	done
+	((__vari == 0)) || printf "%d dependency command not found." "$__vari"
 }
 
 swh_storewine()
 {
-	[ -x "$install/bin/wine" ] || swh_error "\$install/bin/wine is missing or not executable. \$install in your launcher have wrong value or winehq not installed"
-	{ [ X"$build_arch" == X"win64" ] && [ -x "$install/bin/wine64" ] ; } || swh_error "\$build_arch set to wine64 but \$install/bin/wine64 is missing or not executable!"
-	local lbn
-	local lwdst
-	lbn=$( wine --version | tr "[:upper:]" "[:lower:]" | cut -d - -f 2- | tr -d "()" | tr " " "-" )
-	lwdst="$cellar/$build_arch/$lbn"
-	if ! [ -x "$lwdst/bin/wine" ] ; then
-		mkdir -p "$lwdst"
-		\cp -rfv "$install"/* "$lwdst"
-	else
-		printf "%s exists, nothing to do.\n" "$lwdst"
+	[ -x "$install/bin/wine" ] || swh_error "\$install/bin/wine is missing or not executable. \$install have wrong value or winehq is not installed"
+	if [ X"$build_arch" == X"win64" ]; then
+		[ -x "$install/bin/wine64" ] || swh_error "\$build_arch set to wine64 but \$install/bin/wine64 is missing or not executable!"
 	fi
-	unset -v lbn
-	unset -v lwdst
+	local __store_path
+	__store_path="$cellar/$build_arch/$( wine --version | tr "[:upper:]" "[:lower:]" | cut -d - -f 2- | tr -d "()" | tr " " "-" )"
+	if ! [ -x "$__store_path/bin/wine" ] ; then
+		mkdir -p "$__store_path"
+		\cp -rfv "$install"/* "$__store_path"
+	else
+		printf "%s exists, nothing to do.\n" "$__store_path"
+	fi
+}
+
+swh_dlwine()
+{
+	swh_ckdep rpm2cpio cpio realpath
+
+	# 1. prepare dir, check if wine is already in cellar
+	if [ X"$WINEARCH" == X'win64' ] || ( uname -m | grep -q x86_64 ); then
+		[ -x "$cellar"/win64/"$build"/bin/wine ] && { printf "%s already stored in cellar, nothing to do.\n" "$build"; exit 0; }
+		[ -d "$cellar"/win64 ] || mkdir -p "$cellar"/win64
+		cd "$cellar"/win64 || swh_error "${FUNCNAME[0]}: cd \$cellar/win64 failed"
+	else
+		[ -x "$cellar"/win32/"$build"/bin/wine ] && { printf "%s already stored in cellar, nothing to do.\n" "$build"; exit 0; }
+		[ -d "$cellar" ] || mkdir -p "$cellar"/win32
+		cd "$cellar"/win32 || swh_error "${FUNCNAME[0]}: cd \$cellar/win32 failed"
+	fi
+
+	# 2. Check if $build pattern is valid. example: 1.2.3-rc4-staging ; 1.2-rc3
+	pattern="[0-9]\.[0-9](\.[0-9]){0,1}(-rc[1-9]){0,1}(-staging){0,1}"
+	[[ "$build" =~ $pattern ]] || swh_error "wrong value in \$build : unrecognized version pattern."
+
+	# 3. Check network and download tool, get fedora distro release version
+	if { command -v wget 1>/dev/null 2>&1; }; then
+		cmd=wget
+		readarray -t rel<<<"$(wget --quiet --tries=1 --timeout=30 --output-document=- https://dl.winehq.org/wine-builds/fedora/ | grep -E -o '<a href="[0-9][0-9]/">' | sed -En 's/^<a href=\"//g; s/\/\">//gp' | sort | uniq)"
+	elif { command -v curl 1>/dev/null 2>&1; }; then
+		cmd=curl
+		readarray -t rel<<<"$(curl --silent --max-time 30 https://dl.winehq.org/wine-builds/fedora/ | grep -E -o '<a href="[0-9][0-9]/">' | sed -En 's/^<a href=\"//g; s/\/\">//gp' | sort | uniq)"
+	else
+		swh_error "This function need wget or curl"
+	fi
+	[ -n "${rel[0]}" ] || swh_error "list winehq fedora build reposiory failed."
+
+	# 4. mkdir download dir
+	[ -d "$build"-downloading ] && rm -rf "$build"-downloading
+	mkdir "$build"-downloading || swh_error "${FUNCNAME[0]}: mkdir \$build-downloading failed"
+	cd "$build"-downloading || swh_error "${FUNCNAME[0]}: cd \$build-downloading failed"
+
+	# 5. Generate rpm file name pattern
+	if [[ "$build" =~ staging ]]; then
+		build_ver="$(echo "$build" | sed -En 's/-rc/\.rc/g; s/-staging$//gp')"
+		pat32=("wine-staging-common-$build_ver-[0-9]\.[0-9]\.i686\.rpm")
+		pat64=("wine-staging64-$build_ver-[0-9]\.[0-9]\.x86_64\.rpm")
+	else
+		build_ver="$(echo "$build" | sed -En 's/-rc/\.rc/gp')"
+		pat32=("wine-devel-common-$build_ver-[0-9]\.[0-9]\.i686\.rpm" "wine-stable-common-$build_ver-[0-9]\.[0-9]\.i686\.rpm")
+		pat64=("wine-devel64-$build_ver-[0-9]\.[0-9]\.x86_64\.rpm" "wine-stable64-$build_ver-[0-9]\.[0-9]\.x86_64\.rpm")
+	fi
+
+	# 6. download 64bit or 32bit
+	# search fedora repo, newer first, if not found, search older
+	for ((i=-1; i >= $((${#rel[@]} * -1)); i--)); do
+		echo 'Using repo: https://dl.winehq.org/wine-builds/fedora/'"${rel[i]}"
+
+		# 6.1 download wine.i686.rpm
+		for ((j=0; j < ${#pat32[@]}; j++)); do
+			case $cmd in
+				wget)
+					rpm32="$(wget -q -O - https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/ | grep -Eo "${pat32[j]}" | sort | uniq)"
+					wget https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/"$rpm32"
+					ret=$?
+					if (( ret == 0 )); then
+						down32=ok
+						break
+					# 404 file not found: curl=22 wget=8
+					elif (( ret == 8 )); then
+						echo "[NOTICE] Specified wine version not found, trying older repo..."
+						continue
+					else
+						# Fatal error, clean download dir, exit
+						cd ..
+						rm -rf "$build"-downloading
+						swh_error "download 32bit wine package failed"
+					fi
+					;;
+				curl)
+					rpm32="$(curl -s --fail https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/ | grep -Eo "${pat32[j]}" | sort | uniq)"
+					curl -O --fail https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/"$rpm32"
+					ret=$?
+					if (( ret == 0 )); then
+						down32=ok
+						break
+					elif (( ret == 22 )); then
+						echo "[NOTICE] Specified wine version not found, trying older repo..."
+						continue
+					else
+						# Fatal error, clean download dir, exit
+						cd ..
+						rm -rf "$build"-downloading
+						swh_error "download 32bit wine package failed"
+					fi
+					;;
+			esac
+		done
+
+		[[ X"$(basename "$(realpath ..)")" == Xwin32 && X"$down32" == Xok ]] && break
+
+		# 6.2 download wine.x86_64.rpm
+		if [ X"$(basename "$(realpath ..)")" == Xwin64 ]; then
+			for ((k=0; k < ${#pat64[@]}; k++)); do
+				case $cmd in
+					wget)
+						rpm64="$(wget -q -O - https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/ | grep -Eo "${pat64[k]}" | sort | uniq)"
+						wget https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/"$rpm64"
+						ret=$?
+						if (( ret == 0 )); then
+							down64=ok
+							break
+						else
+							# Fatal error, clean download dir, exit
+							cd ..
+							rm -rf "$build"-downloading
+							swh_error "download 64bit wine package failed"
+						fi
+						;;
+					curl)
+						rpm64="$(curl -s --fail https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/ | grep -Eo "${pat64[k]}" | sort | uniq)"
+						curl -O --fail https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/"$rpm64"
+						ret=$?
+						if (( ret == 0 )); then
+							down64=ok
+							break
+						else
+							# Fatal error, clean download dir, exit
+							cd ..
+							rm -rf "$build"-downloading
+							swh_error "download 64bit wine package failed"
+						fi
+						;;
+				esac
+			done
+			[[ X"$down32" == Xok && X"$down64" == Xok ]] && break
+		fi
+
+	done
+
+	[ X"$down32" == Xok ] || swh_error "download 32bit wine package failed"
+	if [ X"$(basename "$(realpath ..)")" == Xwin64 ]; then { [ X"$down64" == Xok ] || swh_error "download 64bit wine package failed"; }; fi
+
+	# 7.extract rpm
+	for f in ./*.rpm; do
+		rpm2cpio "$f" | cpio -idmv
+	done
+	src="$(find ./opt -mindepth 1 -maxdepth 1 -type d)" || swh_error "can not find extracted wine dir"
+	mv "$src" ../"$build" || swh_error "move wine dir failed"
+	cd .. && rm -rf "$build"-downloading
 }
 
 swh_init()
@@ -92,7 +248,169 @@ swh_init()
 
 swh_checkprefix()
 {
-	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || swh_error "wineprefix dir does not exist, if you are on a slow HDD, please wait some seconds. To create it, try $SWH_LAUNCHER c"
+	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || swh_error "wineprefix dir is not created, or if your prefix is on a slow HDD, please wait some seconds and try again. To create it, try $SWH_LAUNCHER c"
+}
+
+# 3rd party dll package: dxvk, faudio
+# usage : swh_3rd pakname command argument 
+# 	pakname: { dxvk, faudio }
+# 	command: { install, uninstall }
+#	argument: --without-dxgi 		# use with dxvk 	https://github.com/doitsujin/dxvk
+# install dir should contain these dir(s): "x86" "x64"
+
+swh_3rdpak()
+{
+	{ [ X"$runner" == X'wine' ] || [ X"$runner" == X'wine64' ] ; } || swh_error "${FUNCNAME[0]}: wrong value in \$runner "
+
+	local pakname="$1"
+	local cmd="$2"
+	local arg="$3"
+
+	case $pakname in
+		dxvk)
+			local idir="$dxvk_install"
+			;;
+		faudio)
+			local idir="$faudio_install"
+			;;
+		*)
+			swh_error "${FUNCNAME[0]}: unknown 3rd party dll package name. currently supported: dxvk, faudio"
+			;;
+	esac
+
+	ls -1 "$idir"/x32/*.dll > /dev/null 2>&1 || swh_error "${FUNCNAME[0]}: 32bit $pakname dll not found."
+	if [ X"$WINEARCH" == X"win64" ]; then
+		ls -1 "$idir"/x64/*.dll > /dev/null 2>&1 || swh_error "${FUNCNAME[0]}: 64bit $pakname dll not found."
+	fi
+
+	case $WINEARCH in
+		win32)
+			local dll32_path="$WINEPREFIX"/drive_c/windows/system32
+			;;
+		win64)
+			local dll32_path="$WINEPREFIX"/drive_c/windows/syswow64
+			local dll64_path="$WINEPREFIX"/drive_c/windows/system32
+			;;
+	esac
+
+	# generate file list, dir x32 and x64 must contain same name dll files
+	local -a ar
+	readarray -t ar<<<"$( find "$idir"/x32 -mindepth 1 -maxdepth 1 -type f -name '*.*' | sed -En 's/^.*\///gp' | LC_ALL=C sort)"
+	printf "%s\n" "${ar[@]}"
+
+	case $cmd in
+		i | install)
+			local -i i
+			for (( i=0; i<${#ar[@]}; i++ )); do
+				! [ -f "$dll32_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
+				[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
+				ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
+				wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 >/dev/null
+			done
+			if [ X"$WINEARCH" == X"win64" ]; then
+				for (( i=0; i<${#ar[@]}; i++ )); do
+					! [ -f "$dll64_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
+					[ -f "$dll64_path"/"${ar[i]}" ] && \mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
+					ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"
+					wine64 reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 >/dev/null
+				done
+			fi
+			printf "%s\n" "${ar[@]}" > "$WINEPREFIX"/drive_c/swh-"$pakname".install
+			# install dxvk 1.0 --without-dxgi
+			if [ X"$pakname" == X"dxvk" ] && [ X"$arg" == X"--without-dxgi" ] ; then
+				\mv -f "$dll32_path"/dxgi.dll."$pakname" "$dll32_path"/dxgi.dll
+				wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f 1 >/dev/null
+				if [ X"$WINEARCH" == X"win64" ]; then
+					\mv -f "$dll64_path"/dxgi.dll."$pakname" "$dll64_path"/dxgi.dll
+					wine64 reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f 1 >/dev/null
+				fi
+			fi
+			;;
+		u | uninstall)
+			[ -f "$WINEPREFIX"/drive_c/swh-"$pakname".install ] || swh_error "$pakname is not installed"
+			local -a aru
+			readarray -t aru < "$WINEPREFIX"/drive_c/swh-"$pakname".install
+			local -i j
+			for (( j=0; j<${#aru[@]}; j++ )); do
+				if [ -f "$dll32_path"/"${aru[j]}"."$pakname" ]; then
+					\mv -f "$dll32_path"/"${aru[j]}"."$pakname" "$dll32_path"/"${aru[j]}"
+					wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${aru[j]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /f 1 >/dev/null
+
+					if [ X"$WINEARCH" == X"win64" ]; then
+						\mv -f "$dll64_path"/"${aru[j]}"."$pakname" "$dll64_path"/"${aru[j]}"
+						# DO NOT RUN `wine64 reg delete` IF DLL REGISTERED AS *FOO.DLL
+					fi
+				else
+					\rm -f "$dll32_path"/"${aru[j]}"
+					wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${aru[j]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /f 1 >/dev/null
+					if [ X"$WINEARCH" == X"win64" ]; then
+						\rm -f "$dll64_path"/"${aru[j]}"
+						# DO NOT RUN `wine64 reg delete` IF DLL REGISTERED AS *FOO.DLL
+					fi
+				fi
+			done
+			;;
+		*)
+			swh_error "${FUNCNAME[0]}: unknown command, supported command: install, uninstall"
+			;;
+	esac
+}
+
+swh_objdump()
+{
+	if (( $# == 1 )); then
+		case "$1" in
+			[1-9] | [1-9][0-9])
+				i=$1
+				local wpath
+				local ldrv
+				local ldf
+				local lfpath
+				wpath="${dir[i]}\\${exe[i]}" 
+				ldrv="$( echo "$wpath" | cut -d : -f 1 | tr '[:upper:]' '[:lower:]' )"
+				ldf="$( echo "$wpath" | cut -d : -f 2- | tr $'\\' '/' )"
+				lfpath="$WINEPREFIX"/dosdevices/"$ldrv":"$ldf"
+				[ -f "$lfpath" ] || swh_error "file not found"
+				printf "\nThis function use linux command \`file\` and \`objdump -p\` scan %s , help you decide proper WINEARCH and dll override\nTip: Reports each DLL as it's loaded using Debug Channels: WINEDEBUG=fixme-all,+loaddll\n\n" "${exe[i]}"
+				file "$lfpath"
+				printf "\n"
+				objdump -p "$lfpath" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
+				unset wpath
+				unset ldrv
+				unset ldf
+				unset lfpath
+				;;
+			*)
+				swh_error "wrong argument"
+				;;
+		esac
+	else
+		swh_error "wrong argument count"
+	fi
+}
+
+# clean open with list
+swh_cowl()
+{
+	printf "\
+\n\
+Remove wine programs from your open with list?\n\
+  Continue with the following commands?\n\n\
+rm -f ~/.local/share/mime/packages/x-wine*\n\
+rm -f ~/.local/share/applications/wine-extension*\n\
+rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*\n\
+rm -f ~/.local/share/mime/application/x-wine-extension*\n\
+\n\
+"
+	read -r -p '(y/n)' temp_var
+	{ [ X"$temp_var" == X'Y' ] || [ X"$temp_var" == X'y' ] ; } && \
+		{
+			\rm -f ~/.local/share/mime/packages/x-wine*;
+			\rm -f ~/.local/share/applications/wine-extension*;
+			\rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*;
+			\rm -f ~/.local/share/mime/application/x-wine-extension*;
+		}
+	unset temp_var
 }
 
 ## work with winetricks, use .verb file
@@ -400,161 +718,66 @@ __EOF__
 	rm -rf "$swh_tempdir"
 }
 
-# 3rd party dll package: dxvk, faudio
-# usage : swh_3rd pakname command argument 
-# 	pakname: { dxvk, faudio }
-# 	command: { install, uninstall }
-#	argument: --without-dxgi 		# use with dxvk 	https://github.com/doitsujin/dxvk
-# install dir should contain these dir(s): "x86" "x64"
-
-swh_3rdpak()
+# Chinese fonts replacement: use google-noto-cjk ttc fonts
+swh_ww_cnfonts_noto()
 {
-	{ [ X"$runner" == X'wine' ] || [ X"$runner" == X'wine64' ] ; } || swh_error "${FUNCNAME[0]}: wrong value in \$runner "
+	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
+	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
+	verbfile='swh_ww_cnfonts_noto.verb'
+	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
+w_metadata swh_ww_cnfonts_noto fonts \
+    title="Creates aliases for Chinese fonts using NotoSansCJK-Regular.ttc and NotoSerifCJK-Regular.ttc" \
+    publisher="Google" \
+    year="2013"
 
-	local pakname="$1"
-	local cmd="$2"
-	local arg="$3"
+load_swh_ww_cnfonts_noto()
+{
+    # Reference : https://en.wikipedia.org/wiki/Noto_fonts
 
-	case $pakname in
-		dxvk)
-			local idir="$dxvk_install"
-			;;
-		faudio)
-			local idir="$faudio_install"
-			;;
-		*)
-			swh_error "${FUNCNAME[0]}: unknown 3rd party dll package name. currently supported: dxvk, faudio"
-			;;
-	esac
+    sdir=(/usr/share/fonts /usr/local/share/fonts $HOME/.fonts)
+    idir='missing'
+    for (( i=0; i < ${#sdir[*]}; i++ )); do
+        if [ -f ${sdir[i]}/google-noto-cjk/NotoSansCJK-Regular.ttc ]; then
+            idir=${sdir[i]}
+        fi
+    done
 
-	ls -1 "$idir"/x32/*.dll > /dev/null 2>&1 || swh_error "${FUNCNAME[0]}: 32bit $pakname dll not found."
-	if [ X"$WINEARCH" == X"win64" ]; then
-		ls -1 "$idir"/x64/*.dll > /dev/null 2>&1 || swh_error "${FUNCNAME[0]}: 64bit $pakname dll not found."
-	fi
+    if ! [ -f $idir/google-noto-cjk/NotoSansCJK-Regular.ttc ]; then
+        w_die "NotoSansCJK-Regular.ttc not found."
+    fi
+    if ! [ -f $idir/google-noto-cjk/NotoSerifCJK-Regular.ttc ]; then
+        w_die "NotoSerifCJK-Regular.ttc not found."
+    fi
 
-	case $WINEARCH in
-		win32)
-			local dll32_path="$WINEPREFIX"/drive_c/windows/system32
-			;;
-		win64)
-			local dll32_path="$WINEPREFIX"/drive_c/windows/syswow64
-			local dll64_path="$WINEPREFIX"/drive_c/windows/system32
-			;;
-	esac
+    content_dir=(google-noto-cjk)
+    for (( i=0; i < ${#content_dir[*]}; i++ )); do
+        w_try_cp_font_files "$idir/${content_dir[i]}" "$W_FONTSDIR_UNIX" "*.ttc"
+    done
+    w_register_font NotoSansCJK-Regular.ttc "Noto Sans CJK JP Regular & Noto Sans CJK KR Regular & Noto Sans CJK SC Regular & Noto Sans CJK TC Regular & Noto Sans Mono CJK JP Regular & Noto Sans Mono CJK KR Regular & Noto Sans Mono CJK SC Regular & Noto Sans Mono CJK TC Regular"
 
-	# generate file list, dir x32 and x64 must contain same name dll files
-	local -a ar
-	readarray -t ar<<<"$( find "$idir"/x32 -mindepth 1 -maxdepth 1 -type f -name '*.dll' | sed -En 's/^.*\///gp' )"
-
-	case $cmd in
-		i | install)
-			local -i i
-			for (( i=0; i<${#ar[@]}; i++ )); do
-				! [ -f "$dll32_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
-				[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
-				ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
-#FIXME :improve these reg code
-				wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /d native /f 1 >/dev/null
-			done
-			if [ X"$WINEARCH" == X"win64" ]; then
-				for (( i=0; i<${#ar[@]}; i++ )); do
-					! [ -f "$dll64_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
-					[ -f "$dll64_path"/"${ar[i]}" ] && \mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
-					ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"
-					wine64 reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /d native /f 1 >/dev/null
-				done
-			fi
-			# install dxvk 1.0 --without-dxgi
-			if ( [ X"$pakname" == X"dxvk" ] && [ X"$arg" == X"--without-dxgi" ] ); then
-				\mv -f "$dll32_path"/dxgi.dll."$pakname" "$dll32_path"/dxgi.dll
-				wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f
-				if [ X"$WINEARCH" == X"win64" ]; then
-					\mv -f "$dll64_path"/dxgi.dll."$pakname" "$dll64_path"/dxgi.dll
-					wine64 reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f 1 >/dev/null
-				fi
-			fi
-			;;
-		u | uninstall)
-			local -i i
-			for (( i=0; i<${#ar[@]}; i++ )); do
-				if [ -f "$dll32_path"/"${ar[i]}"."$pakname" ]; then
-					\mv -f "$dll32_path"/"${ar[i]}"."$pakname" "$dll32_path"/"${ar[i]}"
-					wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /f
-					if [ X"$WINEARCH" == X"win64" ]; then
-						\mv -f "$dll64_path"/"${ar[i]}"."$pakname" "$dll64_path"/"${ar[i]}"
-						wine64 reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "${ar[i]}" /f 1 >/dev/null
-					fi
-				fi
-			done
-			;;
-		*)
-			swh_error "${FUNCNAME[0]}: unknown command, supported command: install, uninstall"
-			;;
-	esac
-
-	unset pakname
-	unset cmd
-	unset arg
-	unset idir
-	unset ar
-	unset i
+    w_register_font NotoSerifCJK-Regular.ttc "Noto Serif CJK JP & Noto Serif CJK KR & Noto Serif CJK SC & Noto Serif CJK TC"
+    
+    w_register_font_replacement "FangSong" "Noto Serif CJK SC"
+    w_register_font_replacement "Microsoft YaHei" "Noto Sans CJK SC Regular"
+    w_register_font_replacement "NSimSun" "Noto Sans CJK SC Regular"
+    w_register_font_replacement "SimHei" "Noto Sans CJK SC Regular"
+    w_register_font_replacement "SimKai" "Noto Serif CJK SC"
+    w_register_font_replacement "SimSun" "Noto Sans CJK SC Regular"
+    w_register_font_replacement "SimSun-ExtB" "Noto Sans CJK SC Regular"
+    w_register_font_replacement "KaiTi" "Noto Serif CJK SC"
+    w_register_font_replacement "Microsoft YaHei UI" "Noto Sans CJK SC Regular"
+    w_register_font_replacement "Dengxian" "Noto Sans CJK SC Regular"
+    w_register_font_replacement "DFKai-SB" "Noto Serif CJK TC"
+    w_register_font_replacement "Microsoft JhengHei" "Noto Sans CJK TC Regular"
+    w_register_font_replacement "MingLiU" "Noto Serif CJK TC"
+    w_register_font_replacement "PMingLiU" "Noto Serif CJK TC"
+    w_register_font_replacement "MingLiU-ExtB" "Noto Sans CJK TC Regular"
+    w_register_font_replacement "PMingLiU-ExtB" "Noto Sans CJK TC Regular"
+    w_register_font_replacement "Microsoft JhengHei UI" "Noto Sans CJK TC Regular"
 }
-
-swh_objdump()
-{
-	if (( $# == 1 )); then
-		case "$1" in
-			[1-9] | [1-9][0-9])
-				i=$1
-				local wpath
-				local ldrv
-				local ldf
-				local lfpath
-				wpath="${dir[i]}\\${exe[i]}" 
-				ldrv="$( echo "$wpath" | cut -d : -f 1 | tr '[:upper:]' '[:lower:]' )"
-				ldf="$( echo "$wpath" | cut -d : -f 2- | tr $'\\' '/' )"
-				lfpath="$WINEPREFIX"/dosdevices/"$ldrv":"$ldf"
-				[ -f "$lfpath" ] || swh_error "file not found"
-				printf "\nThis function use linux command \`file\` and \`objdump -p\` scan %s , help you decide proper WINEARCH and dll override\nTip: Reports each DLL as it's loaded using Debug Channels: WINEDEBUG=fixme-all,+loaddll\n\n" "${exe[i]}"
-				file "$lfpath"
-				printf "\n"
-				objdump -p "$lfpath" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
-				unset wpath
-				unset ldrv
-				unset ldf
-				unset lfpath
-				;;
-			*)
-				swh_error "wrong argument"
-				;;
-		esac
-	else
-		swh_error "wrong argument count"
-	fi
-}
-
-# clean open with list
-swh_cowl()
-{
-	printf "\
-\n\
-Remove wine programs from your open with list?\n\
-  Continue with the following commands?\n\n\
-rm -f ~/.local/share/mime/packages/x-wine*\n\
-rm -f ~/.local/share/applications/wine-extension*\n\
-rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*\n\
-rm -f ~/.local/share/mime/application/x-wine-extension*\n\
-\n\
-"
-	read -r -p '(y/n)' temp_var
-	{ [ X"$temp_var" == X'Y' ] || [ X"$temp_var" == X'y' ] ; } && \
-		{
-			\rm -f ~/.local/share/mime/packages/x-wine*;
-			\rm -f ~/.local/share/applications/wine-extension*;
-			\rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*;
-			\rm -f ~/.local/share/mime/application/x-wine-extension*;
-		}
-	unset temp_var
+__EOF__
+	winetricks "$swh_tempdir/$verbfile"
+	rm -rf "$swh_tempdir"
 }
 
 swh_help()
@@ -567,7 +790,7 @@ Usage: APP_LAUNCHER COMMAND [argument]
 Commands:
 s                           Store wine to your cellar dir
 c                           Run winecfg, Create wineprefix
-cc                          [VIOLATE BUG REPORTING TERM!] Same as c, also remove symbolic link z: your root dir will not visable by wine programs. Don't use this command if you are using production software
+d                           Download wine from winehq fedora repository, please use valid value in \$build like: 4.5 ; 4.5-staging ; 3.0.5 ; 4.0-rc7 . before use this feature, make sure you have satisfied wine dependencies
 i                           Inherit old profile files, useful when upgrading from old frefixes: copy these dirs from one old prefix to current prefix: 'C:\users\USERNAME\AppData' 'C:\users\USERNAME\Application Data' 'C:\users\USERNAME\Local Settings'
 cdd                         Use after c or cc, create shared drive D: files in this dir is visable by all wine prefixes (default path: '\$HOME/swh/drives/drive_d')
 cde                         Use after c or cc, create pirvate drive E: files in this dir is visable by this wine prefix only (default path: '\$HOME/swh/drives/\$prefix/drive_e')
@@ -577,6 +800,7 @@ l [application]             Launch specified application: see Examples below
 2                           Launch 2nd application
 99                          Launch 99th application, swh now supports up to 99 apps in one launcher!
 w [winetricks command]      winetricks command
+wf                          fonts override, use native windows `Fonts` dir
 ww [swh command]            swh command, these commands need winetricks as dependency, but they are NOT winetricks command
   ww d3dcompiler_42             install d3dcompiler_42, 32bit and 64bit
   ww dotnet40                   (EXPERIMENTIAL FUNCTION) Extract dotnet40 files only, on 64bit prefix
@@ -649,7 +873,7 @@ __EOF__
 
 #main()
 #{
-( uname | grep -i "Linux" >/dev/null 2>&1 ) || swh_error "This script runs on Linux!"
+( uname -s | grep -i "Linux" >/dev/null 2>&1 ) || swh_error "This script runs on Linux!"
 [ -v SWH_LAUNCHER ] || \
 	{
 		printf "No launcher or launcher too old, please remake launcher\n"
@@ -657,7 +881,7 @@ __EOF__
 		swh_help;
 		exit 1
 	}
-swh_check_dependencies
+swh_ckdep winetricks
 swh_config
 if (( $# > 0 )); then
 	case "$1" in
@@ -669,10 +893,10 @@ if (( $# > 0 )); then
 			if [ -z "$invoker" ]; then
 				"$runner" "$@"
 			else
-				if [ -z "$invoker_argsstr" ]; then
+				if [ -z "$invoker_args_str" ]; then
 					"$invoker" "$runner" "$@"
 				else
-					"$invoker" $invoker_argsstr "$runner" "$@"
+					"$invoker" $invoker_args_str "$runner" "$@"
 				fi
 			fi
 		else
@@ -680,28 +904,49 @@ if (( $# > 0 )); then
 		fi
 		;;
 	[1-9] | [1-9][0-9])
+		# invoker invoker_args_str runner runas_str exe[i] args[i]
+		# strace --e trace=open,openat wine runas /trustlevel:0x20000 cmd /c start /unix 'C:\Program Files (x86)\Example Software\example.exe' -arg1 -arg2
+		# strace --e trace=open,openat wine example.exe -arg1 -arg2
+		# EXPECTING QUOTING ISSUE !
 		swh_init
 		swh_checkprefix
 		i=$1
-		# do not quote: $invoker_argsstr ${args[i]}
-		if [ -z "$invoker" ]; then
-			if [ -z "${args[i]}" ]; then
-				"$runner" start /d "${dir[i]}" "${exe[i]}"
+		exeupath="$(winepath -u "${exe[i]}")"
+		exeudir="$(dirname "$exeupath")"
+		exeufile="$(basename "$exeupath")"
+		cd "$exeudir" || swh_error "cd $exeudir failed"
+		#exe-x64
+		if ( file "$exeupath" | grep -E 'PE32\+ executable .+ x86-64' ); then
+			if [ X"$WINEARCH" == Xwin64 ] && [ X"$use_wine64" == Xtrue ] && [ X"$runner" == Xwine ]; then runner=wine64 ; fi
+			if [ -z "$invoker" ]; then
+				"$runner" "$exeufile" ${args[i]}
 			else
-				"$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
-			fi
-		else
-			if [ -z "$invoker_argsstr" ]; then
-				if [ -z "${args[i]}" ]; then
-					"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
+				if [ -z "$invoker_args_str" ]; then
+					"$invoker" "$runner" "$exeufile" ${args[i]}
 				else
-					"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
+					"$invoker" $invoker_args_str "$runner" "$exeufile" ${args[i]}
 				fi
+			fi
+		#exe-x32
+		elif ( file "$exeupath" | grep -E 'PE32 executable .+ Intel 80386' ); then
+			if [ -z "$invoker" ]; then
+				"$runner" "$exeufile" ${args[i]}
 			else
-				if [ -z "${args[i]}" ]; then
-					"$invoker" $invoker_argsstr "$runner" start /d "${dir[i]}" "${exe[i]}"
+				if [ -z "$invoker_args_str" ]; then
+					"$invoker" "$runner" "$exeufile" ${args[i]}
 				else
-					"$invoker" $invoker_argsstr "$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
+					"$invoker" $invoker_args_str "$runner" "$exeufile" ${args[i]}
+				fi
+			fi
+		#msi or bat file
+		else
+			if [ -z "$invoker" ]; then
+				"$runner" start /unix "$exeufile" ${args[i]}
+			else
+				if [ -z "$invoker_args_str" ]; then
+					"$invoker" "$runner" start /unix "$exeufile" ${args[i]}
+				else
+					"$invoker" $invoker_args_str "$runner" start /unix "$exeufile" ${args[i]}
 				fi
 			fi
 		fi
@@ -714,16 +959,12 @@ if (( $# > 0 )); then
 	s)
 		swh_storewine
 		;;
+	d)
+		swh_dlwine
+		;;
 	c)
 		swh_init
 		wine winecfg
-		;;
-	cc)
-		swh_init
-		wine winecfg
-		if [ -L "$WINEPREFIX/dosdevices/z:" ]; then
-			rm "$WINEPREFIX/dosdevices/z:"
-		fi
 		;;
 	i)
 		swh_init
@@ -788,6 +1029,18 @@ if (( $# > 0 )); then
 			winetricks "$@"
 		fi
 		;;
+	wf | --windowsfonts)
+		swh_init
+		swh_checkprefix
+		if [ -d "$windowsfonts"  ]; then
+			cd "$WINEPREFIX"/dosdevices/c:/windows
+			\rm -fr ./Fonts
+			ln -s "$windowsfonts" ./Fonts
+		else
+			shift
+			swh_error "$windowsfonts dir not exist."
+		fi
+		;;
 	ww | --swhwinetricks)
 		swh_init
 		swh_checkprefix
@@ -808,6 +1061,9 @@ if (( $# > 0 )); then
 					;;
 				vcrun2017)
 					swh_ww_vcrun2017
+					;;
+				cnfonts | cnfonts_noto)
+					swh_ww_cnfonts_noto
 					;;
 				*)
 					swh_error "unknown argument."
@@ -851,32 +1107,45 @@ else
 	swh_checkprefix
 	select item in "${exe[@]}" help quit; do
 		i=$REPLY
-		if [ X"$item" == X"help" ]; then
-			swh_help
-			break
-		fi
-		if [ X"$item" == X"quit" ]; then
-			break
-		fi
-		# do not quote: $invoker_argsstr ${args[i]}
-		if [ -z "$invoker" ]; then
-			if [ -z "${args[i]}" ]; then
-				"$runner" start /d "${dir[i]}" "${exe[i]}"
+		if [ X"$item" == X"help" ]; then swh_help; break; fi
+		if [ X"$item" == X"quit" ]; then break; fi
+		#run ${exe[i]}
+		exeupath="$(winepath -u "${exe[i]}")"
+		exeudir="$(dirname "$exeupath")"
+		exeufile="$(basename "$exeupath")"
+		cd "$exeudir" || swh_error "cd $exeudir failed"
+		#exe-x64
+		if ( file "$exeupath" | grep -E 'PE32\+ executable .+ x86-64' ); then
+			if [ X"$WINEARCH" == Xwin64 ] && [ X"$use_wine64" == Xtrue ] && [ X"$runner" == Xwine ]; then runner=wine64 ; fi
+			if [ -z "$invoker" ]; then
+				"$runner" "$exeufile" ${args[i]}
 			else
-				"$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
-			fi
-		else
-			if [ -z "$invoker_argsstr" ]; then
-				if [ -z "${args[i]}" ]; then
-					"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}"
+				if [ -z "$invoker_args_str" ]; then
+					"$invoker" "$runner" "$exeufile" ${args[i]}
 				else
-					"$invoker" "$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
+					"$invoker" $invoker_args_str "$runner" "$exeufile" ${args[i]}
 				fi
+			fi
+		#exe-x32
+		elif ( file "$exeupath" | grep -E 'PE32 executable .+ Intel 80386' ); then
+			if [ -z "$invoker" ]; then
+				"$runner" "$exeufile" ${args[i]}
 			else
-				if [ -z "${args[i]}" ]; then
-					"$invoker" $invoker_argsstr "$runner" start /d "${dir[i]}" "${exe[i]}"
+				if [ -z "$invoker_args_str" ]; then
+					"$invoker" "$runner" "$exeufile" ${args[i]}
 				else
-					"$invoker" $invoker_argsstr "$runner" start /d "${dir[i]}" "${exe[i]}" ${args[i]}
+					"$invoker" $invoker_args_str "$runner" "$exeufile" ${args[i]}
+				fi
+			fi
+		#msi or bat file
+		else
+			if [ -z "$invoker" ]; then
+				"$runner" start /unix "$exeufile" ${args[i]}
+			else
+				if [ -z "$invoker_args_str" ]; then
+					"$invoker" "$runner" start /unix "$exeufile" ${args[i]}
+				else
+					"$invoker" $invoker_args_str "$runner" start /unix "$exeufile" ${args[i]}
 				fi
 			fi
 		fi
