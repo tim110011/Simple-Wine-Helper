@@ -32,18 +32,7 @@ set -e
 
 (( BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2 || BASH_VERSINFO[0] > 4 )) || { printf "This script need bash version 4.2 or higher.\n" >&2; exit 1; }
 
-SWH_VERSION=2.8.0
-
-swh_config()  # swh default value, modify me
-{
-	export cellar="$HOME/swh/cellar"				# store wine here
-	export table="$HOME/swh/table"					# wineprefix dirs cluster
-	export drives="$HOME/swh/drives"				# wine drives dir
-	export windowsfonts="$HOME/swh/Fonts"			# native windows `Fonts` dir
-	#export WINEDEBUG=${WINEDEBUG:=fixme-all,+loaddll,+tid}
-	export WINEDEBUG=${WINEDEBUG:=fixme-all,+tid}
-	export WINEDLLOVERRIDES=${WINEDLLOVERRIDES:=winemenubuilder.exe=}
-}
+SWH_VERSION=2.9.0
 
 swh_error()
 {
@@ -53,190 +42,244 @@ swh_error()
 
 swh_pause()
 {
-	local __vars
-	read -r -p 'Press any key to continue...' __vars
+	typeset ch
+	#shellcheck disable=2034
+	read -r -p 'Press any key to continue...' ch
+	unset ch
 }
 
-swh_ckdep()
+swh_config()
 {
-	local -i __vari=0
-	while [ -n "$1" ]; do
-		if ! { command -v "$1" >/dev/null 2>&1; }; then
-			 __vari+=1
-			 printf "missing dependency: %s\n" "$1"
+	if ! [ -x ./swh_profile ]; then
+		echo "You can modify swh_profile to change swh settings."
+		cat > ./swh_profile <<-'__EOF__'
+			#!/bin/bash
+			
+			export default_cellar="$HOME/swh/cellar"					# store wine here
+			export default_table="$HOME/swh/table"						# wineprefix dirs cluster
+			export default_d1="$HOME/swh/drives"						# dir hold wine extra drives ( D: E: ) , not in wineprefix, should on a fast SSD, for programs/games need fast disk io perofrmance.
+			export default_d2="/mnt/hdd_sda3_home/me/swh/drives"		# optional, dir hold wine extra drives ( F: G: ) , not in wineprefix, maybe on a slow HDD, for small programs/games.
+			export windowsfonts="$HOME/swh/Fonts"						# optional, windows `Fonts` dir
+			export WINEDEBUG=${WINEDEBUG:-fixme-all,+tid}
+		__EOF__
+		(( $? == 0 )) || swh_error "${FUNCNAME[0]}: Create swh_profile error."
+		chmod u+x ./swh_profile
+	fi
+	source ./swh_profile
+	cellar="${cellar:-$default_cellar}"
+	table="${table:-$default_table}"
+	d1="${d1:-$default_d1}"
+	d2="${d2:-$default_d2}"
+
+	unset default_cellar default_table default_d1 default_d2
+}
+
+swh_checkdependency()
+{
+	typeset -i i=0
+	until [ -z "$1" ]; do
+		if ! { command -v "$1" > /dev/null 2>&1; }; then
+			 i+=1
+			 printf "Missing dependency: %s\n" "$1"
 		fi
 		shift
 	done
-	((__vari == 0)) || printf "%d dependency command not found." "$__vari"
+	(( count == 0 )) || swh_error "${FUNCNAME[0]}: Dependency package requirement not met."
+
+	unset i
 }
 
 swh_storewine()
 {
-	[ -x "$install/bin/wine" ] || swh_error "\$install/bin/wine is missing or not executable. \$install have wrong value or winehq is not installed"
-	if [ X"$build_arch" == X"win64" ]; then
-		[ -x "$install/bin/wine64" ] || swh_error "\$build_arch set to wine64 but \$install/bin/wine64 is missing or not executable!"
+	[ -x "$install/bin/wine" ] || swh_error "${FUNCNAME[0]}: \$install/bin/wine is missing or not executable. \$install have wrong value or winehq is not installed"
+	if [[ "$build_arch" == 'win64' ]]; then
+		[ -x "$install/bin/wine64" ] || swh_error "${FUNCNAME[0]}: \$build_arch set to wine64 but \$install/bin/wine64 is missing or not executable!"
 	fi
-	local __store_path
-	__store_path="$cellar/$build_arch/$( wine --version | tr "[:upper:]" "[:lower:]" | cut -d - -f 2- | tr -d "()" | tr " " "-" )"
-	if ! [ -x "$__store_path/bin/wine" ] ; then
-		mkdir -p "$__store_path"
-		\cp -rfv "$install"/* "$__store_path"
+	typeset store_path
+	store_path="$cellar/$build_arch/$( wine --version | tr "[:upper:]" "[:lower:]" | cut -d - -f 2- | tr -d "()" | tr " " "-" )"
+	if ! [ -x "$store_path/bin/wine" ] ; then
+		mkdir -p "$store_path"
+		\cp -rfv "$install"/* "$store_path"
 	else
-		printf "%s exists, nothing to do.\n" "$__store_path"
+		printf "%s exists, nothing to do.\n" "$store_path"
 	fi
+
+	unset store_path
+}
+
+# downloader wrapper
+# Usage: swh_download [-q] url
+#         -q : download url to stdout silently
+#     no arg : download url to disk
+swh_download()
+{
+	typeset -i r
+	case "$downloader" in
+		wget)
+			if [[ "$1" == '-q' ]]; then
+				shift
+				wget -q -t 1 -T 30 -O - "$1"
+				r=$?
+			else
+				wget -t 1 -T 30 "$1"
+				r=$?
+			fi
+			;;
+		curl)
+			if [[ "$1" == '-q' ]]; then
+				shift
+				curl -s -f -m 30 "$1"
+				r=$?
+			else
+				curl -f -m 30 -O "$1"
+				r=$?
+			fi
+			;;
+	esac
+	return $r
 }
 
 swh_dlwine()
 {
-	swh_ckdep rpm2cpio cpio realpath
+	if { grep fedora > /dev/null 2>&1 < /proc/version; }; then
+		printf "Note: Download wine binary build from winehq repository for newest release of fedora.\n"
+		swh_pause
+	else
+		printf "Note: Download wine binary build from winehq repository for newest release of fedora.\nThis method may not work on your distor.\n"
+		swh_pause
+	fi
+	swh_checkdependency rpm2cpio cpio realpath
 
 	# 1. prepare dir, check if wine is already in cellar
-	if [ X"$WINEARCH" == X'win64' ] || ( uname -m | grep -q x86_64 ); then
-		[ -x "$cellar"/win64/"$build"/bin/wine ] && { printf "%s already stored in cellar, nothing to do.\n" "$build"; exit 0; }
-		[ -d "$cellar"/win64 ] || mkdir -p "$cellar"/win64
-		cd "$cellar"/win64 || swh_error "${FUNCNAME[0]}: cd \$cellar/win64 failed"
+	if ( uname -m | grep -q x86_64 ); then
+		typeset pak_arch=win64
 	else
-		[ -x "$cellar"/win32/"$build"/bin/wine ] && { printf "%s already stored in cellar, nothing to do.\n" "$build"; exit 0; }
-		[ -d "$cellar" ] || mkdir -p "$cellar"/win32
-		cd "$cellar"/win32 || swh_error "${FUNCNAME[0]}: cd \$cellar/win32 failed"
+		typeset pak_arch=win32
 	fi
+
+	[ -x "$cellar"/"$pak_arch"/"$build"/bin/wine ] && { printf "%s already stored in cellar, nothing to do.\n" "$build"; exit 0; }
+	[ -d "$cellar"/"$pak_arch" ] || mkdir -p "$cellar"/"$pak_arch"
+	cd "$cellar"/"$pak_arch" || swh_error "${FUNCNAME[0]}: cd \$cellar/\$WINEARCH failed."
 
 	# 2. Check if $build pattern is valid. example: 1.2.3-rc4-staging ; 1.2-rc3
-	pattern="[0-9]\.[0-9](\.[0-9]){0,1}(-rc[1-9]){0,1}(-staging){0,1}"
-	[[ "$build" =~ $pattern ]] || swh_error "wrong value in \$build : unrecognized version pattern."
+	typeset pattern='[0-9]\.[0-9](\.[0-9]){0,1}(-rc[1-9]){0,1}(-staging){0,1}'
+	[[ "$build" =~ $pattern ]] || swh_error "${FUNCNAME[0]}: wrong value in \$build : unrecognized version pattern."
 
-	# 3. Check network and download tool, get fedora distro release version
-	if { command -v wget 1>/dev/null 2>&1; }; then
-		cmd=wget
-		readarray -t rel<<<"$(wget --quiet --tries=1 --timeout=30 --output-document=- https://dl.winehq.org/wine-builds/fedora/ | grep -E -o '<a href="[0-9][0-9]/">' | sed -En 's/^<a href=\"//g; s/\/\">//gp' | sort | uniq)"
-	elif { command -v curl 1>/dev/null 2>&1; }; then
-		cmd=curl
-		readarray -t rel<<<"$(curl --silent --max-time 30 https://dl.winehq.org/wine-builds/fedora/ | grep -E -o '<a href="[0-9][0-9]/">' | sed -En 's/^<a href=\"//g; s/\/\">//gp' | sort | uniq)"
+	# 3. Generate rpm file name pattern
+	if [[ "$build" =~ staging ]]; then
+		typeset build_ver="$(echo "$build" | sed -E 's/-rc/\.rc/g; s/-staging$//g')"
+		typeset -a pat32=("wine-staging-common-$build_ver-[0-9](\.[0-9]){0,1}\.i686\.rpm")
+		typeset -a pat64=("wine-staging64-$build_ver-[0-9](\.[0-9]){0,1}\.x86_64\.rpm")
 	else
-		swh_error "This function need wget or curl"
+		typeset build_ver="$(echo "$build" | sed -E 's/-rc/\.rc/g')"
+		typeset -a pat32=("wine-devel-common-$build_ver-[0-9](\.[0-9]){0,1}\.i686\.rpm" "wine-development-common-$build_ver-[0-9](\.[0-9]){0,1}\.i686\.rpm" "wine-stable-common-$build_ver-[0-9](\.[0-9]){0,1}\.i686\.rpm")
+		typeset -a pat64=("wine-devel64-$build_ver-[0-9](\.[0-9]){0,1}\.x86_64\.rpm" "wine-development64-$build_ver-[0-9](\.[0-9]){0,1}\.x86_64\.rpm" "wine-stable64-$build_ver-[0-9](\.[0-9]){0,1}\.x86_64\.rpm")
 	fi
-	[ -n "${rel[0]}" ] || swh_error "list winehq fedora build reposiory failed."
 
-	# 4. mkdir download dir
-	[ -d "$build"-downloading ] && rm -rf "$build"-downloading
+	# 4. goto download dir
+	[ -d "$build"-downloading ] && \rm -rf "$build"-downloading
 	mkdir "$build"-downloading || swh_error "${FUNCNAME[0]}: mkdir \$build-downloading failed"
 	cd "$build"-downloading || swh_error "${FUNCNAME[0]}: cd \$build-downloading failed"
 
-	# 5. Generate rpm file name pattern
-	if [[ "$build" =~ staging ]]; then
-		build_ver="$(echo "$build" | sed -En 's/-rc/\.rc/g; s/-staging$//gp')"
-		pat32=("wine-staging-common-$build_ver-[0-9]\.[0-9]\.i686\.rpm")
-		pat64=("wine-staging64-$build_ver-[0-9]\.[0-9]\.x86_64\.rpm")
+	# 5. Check network and download tool, get fedora distro release version
+	if { command -v wget 1 > /dev/null 2>&1; }; then
+		typeset downloader=wget
+	elif { command -v curl 1 > /dev/null 2>&1; }; then
+		typeset downloader=curl
 	else
-		build_ver="$(echo "$build" | sed -En 's/-rc/\.rc/gp')"
-		pat32=("wine-devel-common-$build_ver-[0-9]\.[0-9]\.i686\.rpm" "wine-stable-common-$build_ver-[0-9]\.[0-9]\.i686\.rpm")
-		pat64=("wine-devel64-$build_ver-[0-9]\.[0-9]\.x86_64\.rpm" "wine-stable64-$build_ver-[0-9]\.[0-9]\.x86_64\.rpm")
+		swh_error "${FUNCNAME[0]}: This function need wget or curl"
 	fi
 
-	# 6. download 64bit or 32bit
-	# search fedora repo, newer first, if not found, search older
-	for ((i=-1; i >= $((${#rel[@]} * -1)); i--)); do
+	# 6. Download
+	typeset -a rel
+	readarray -t rel <<<"$(swh_download -q https://dl.winehq.org/wine-builds/fedora/ | grep -E -o '<a href="[0-9][0-9]/">' | sed -En 's/^<a href=\"//g; s/\/\">//gp' | sort | uniq)"
+	[ -z "${rel[0]}" ] && swh_error "${FUNCNAME[0]}: list winehq fedora build repo failed."
+	typeset -i i
+	for (( i=-1; i >= $((${#rel[@]} * -1)); i-- )); do
 		echo 'Using repo: https://dl.winehq.org/wine-builds/fedora/'"${rel[i]}"
 
 		# 6.1 download wine.i686.rpm
-		for ((j=0; j < ${#pat32[@]}; j++)); do
-			case $cmd in
-				wget)
-					rpm32="$(wget -q -O - https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/ | grep -Eo "${pat32[j]}" | sort | uniq)"
-					wget https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/"$rpm32"
-					ret=$?
-					if (( ret == 0 )); then
-						down32=ok
-						break
-					# 404 file not found: curl=22 wget=8
-					elif (( ret == 8 )); then
-						echo "[NOTICE] Specified wine version not found, trying older repo..."
-						continue
-					else
-						# Fatal error, clean download dir, exit
-						cd ..
-						rm -rf "$build"-downloading
-						swh_error "download 32bit wine package failed"
-					fi
-					;;
-				curl)
-					rpm32="$(curl -s --fail https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/ | grep -Eo "${pat32[j]}" | sort | uniq)"
-					curl -O --fail https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/"$rpm32"
-					ret=$?
-					if (( ret == 0 )); then
-						down32=ok
-						break
-					elif (( ret == 22 )); then
-						echo "[NOTICE] Specified wine version not found, trying older repo..."
-						continue
-					else
-						# Fatal error, clean download dir, exit
-						cd ..
-						rm -rf "$build"-downloading
-						swh_error "download 32bit wine package failed"
-					fi
-					;;
-			esac
+		typeset buf32="$(swh_download -q https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/)"
+		[ -z "$buf32" ] && swh_error "${FUNCNAME[0]}: $downloader: get 32bit package list failed."
+		typeset -i j
+		for (( j=0; j < ${#pat32[@]}; j++ )); do
+			typeset rpm32="$(echo "$buf32" | grep -Eo "${pat32[j]}" | sort | uniq)"
+			if [ -z "$rpm32" ]; then
+				if (( j+1 < ${#pat32[@]} )); then
+					echo "[DEBUG] j: $j: trying another 32bit package pattern"
+					continue 1
+				else
+					echo "[DEBUG] j: $j: 32bit package pattern not foun, searcho older repo..."
+					continue 2
+				fi
+			fi
+			if { swh_download https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/i686/"$rpm32"; }; then
+				typeset down32=ok
+				break
+			else
+				cd ..
+				\rm -rf "$build"-downloading
+				swh_error "${FUNCNAME[0]}: $downloader: download 32bit wine package failed"
+			fi
 		done
 
-		[[ X"$(basename "$(realpath ..)")" == Xwin32 && X"$down32" == Xok ]] && break
-
 		# 6.2 download wine.x86_64.rpm
-		if [ X"$(basename "$(realpath ..)")" == Xwin64 ]; then
-			for ((k=0; k < ${#pat64[@]}; k++)); do
-				case $cmd in
-					wget)
-						rpm64="$(wget -q -O - https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/ | grep -Eo "${pat64[k]}" | sort | uniq)"
-						wget https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/"$rpm64"
-						ret=$?
-						if (( ret == 0 )); then
-							down64=ok
-							break
-						else
-							# Fatal error, clean download dir, exit
-							cd ..
-							rm -rf "$build"-downloading
-							swh_error "download 64bit wine package failed"
-						fi
-						;;
-					curl)
-						rpm64="$(curl -s --fail https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/ | grep -Eo "${pat64[k]}" | sort | uniq)"
-						curl -O --fail https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/"$rpm64"
-						ret=$?
-						if (( ret == 0 )); then
-							down64=ok
-							break
-						else
-							# Fatal error, clean download dir, exit
-							cd ..
-							rm -rf "$build"-downloading
-							swh_error "download 64bit wine package failed"
-						fi
-						;;
-				esac
+		if [[ "$pak_arch" == 'win64' ]]; then
+			typeset buf64="$(swh_download -q https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/)"
+			[ -z "$buf64" ] && swh_error "${FUNCNAME[0]}: $downloader: get 64bit package list failed."
+			typeset -i k
+			for (( k=0; k < ${#pat64[@]}; k++ )); do
+				typeset rpm64="$(echo "$buf64" | grep -Eo "${pat64[k]}" | sort | uniq)"
+				if [ -z "$rpm64" ]; then
+					if (( k+1 < ${#pat64[@]} )); then
+						echo "[DEBUG] k: $k: trying another 64bit package pattern"
+						continue 1
+					else
+						swh_error "${FUNCNAME[0]}: expected 64bit package not found"
+					fi
+				fi
+				if { swh_download https://dl.winehq.org/wine-builds/fedora/"${rel[i]}"/x86_64/"$rpm64"; }; then
+					typeset down64=ok
+					break
+				else
+					cd ..
+					\rm -rf "$build"-downloading
+					swh_error "${FUNCNAME[0]}: $downloader :download 64bit wine package failed"
+				fi
 			done
-			[[ X"$down32" == Xok && X"$down64" == Xok ]] && break
+		fi
+
+		if [[ "$pak_arch" == 'win64' ]]; then
+			[[ "$down32" == 'ok' && "$down64" == 'ok' ]] && break
+		elif [[ "$pak_arch" == 'win32' ]]; then
+			[[ "$down32" == 'ok' ]] && break
 		fi
 
 	done
 
-	[ X"$down32" == Xok ] || swh_error "download 32bit wine package failed"
-	if [ X"$(basename "$(realpath ..)")" == Xwin64 ]; then { [ X"$down64" == Xok ] || swh_error "download 64bit wine package failed"; }; fi
+	# 7. Download success?
+	if [[ "$pak_arch" == 'win64' ]]; then
+		[[ "$down32" == 'ok' && "$down64" == 'ok' ]] || swh_error "${FUNCNAME[0]}: Download winehq package arch=$WINEARCH failed"
+	elif [[ "$pak_arch" == 'win32' ]]; then
+		[[ "$down32" == 'ok' ]] || swh_error "${FUNCNAME[0]}: Download winehq package arch=$WINEARCH failed"
+	fi
 
-	# 7.extract rpm
+	# 8.extract rpm
 	for f in ./*.rpm; do
 		rpm2cpio "$f" | cpio -idmv
 	done
-	src="$(find ./opt -mindepth 1 -maxdepth 1 -type d)" || swh_error "can not find extracted wine dir"
-	mv "$src" ../"$build" || swh_error "move wine dir failed"
-	cd .. && rm -rf "$build"-downloading
+	typeset src="$(find ./opt -mindepth 1 -maxdepth 1 -type d)" || swh_error "${FUNCNAME[0]}: can not find extracted wine dir"
+	\mv "$src" ../"$build" || swh_error "${FUNCNAME[0]}: move wine dir failed"
+	cd .. && \rm -rf "$build"-downloading
+
+	unset pak_arch pattern pat32 pat64 downloader rel i buf32 j rpm32 down32 buf64 k rpm64 down64
 }
 
 swh_init()
 {
 	export WINEVERPATH="$cellar/$build_arch/$build"
-	[ -x "$WINEVERPATH/bin/wine" ] || swh_error "$WINEVERPATH/bin/wine is missing or not executable, store wine to your own repository directory before use. try $SWH_LAUNCHER s"
-	{ [ X"$build_arch" == X"win64" ] && [ -x "$WINEVERPATH/bin/wine64" ] ; } || swh_error "\$build_arch set to wine64 but $WINEVERPATH/bin/wine64 is missing or not executable!"
+	[ -x "$WINEVERPATH/bin/wine" ] || swh_error "${FUNCNAME[0]}: $WINEVERPATH/bin/wine is missing or not executable, store wine to your own repository directory before use. try $SWH_LAUNCHER s"
+	if [[ "$build_arch" == 'win64' ]]; then [ -x "$WINEVERPATH/bin/wine64" ] || swh_error "${FUNCNAME[0]}: \$build_arch set to wine64 but $WINEVERPATH/bin/wine64 is missing or not executable!"; fi;
 	export WINEPREFIX="$table/$WINEARCH/$build/$prefix"
 	[ -d "$WINEPREFIX" ] || mkdir -p "$WINEPREFIX"
 	export PATH="$WINEVERPATH/bin:$PATH"
@@ -260,133 +303,137 @@ swh_checkprefix()
 
 swh_3rdpak()
 {
-	{ [ X"$runner" == X'wine' ] || [ X"$runner" == X'wine64' ] ; } || swh_error "${FUNCNAME[0]}: wrong value in \$runner "
+	[[ "$runner" =~ wine|wine64 ]] || swh_error "${FUNCNAME[0]}: wrong value in \$runner , must be wine or wine64"
 
-	local pakname="$1"
-	local cmd="$2"
-	local arg="$3"
+	typeset pakname="$1"
+	typeset cmd="$2"
+	typeset arg="$3"
+
+	case $WINEARCH in
+		win32)
+			typeset dll32_path="$WINEPREFIX"/drive_c/windows/system32
+			;;
+		win64)
+			typeset dll32_path="$WINEPREFIX"/drive_c/windows/syswow64
+			typeset dll64_path="$WINEPREFIX"/drive_c/windows/system32
+			;;
+	esac
 
 	case $pakname in
 		dxvk)
-			local idir="$dxvk_install"
+			typeset idir="$dxvk_install"
+			;;
+		d9vk)
+			typeset idir="$d9vk_install"
 			;;
 		faudio)
-			local idir="$faudio_install"
+			typeset idir="$faudio_install"
 			;;
 		*)
 			swh_error "${FUNCNAME[0]}: unknown 3rd party dll package name. currently supported: dxvk, faudio"
 			;;
 	esac
 
-	ls -1 "$idir"/x32/*.dll > /dev/null 2>&1 || swh_error "${FUNCNAME[0]}: 32bit $pakname dll not found."
-	if [ X"$WINEARCH" == X"win64" ]; then
-		ls -1 "$idir"/x64/*.dll > /dev/null 2>&1 || swh_error "${FUNCNAME[0]}: 64bit $pakname dll not found."
-	fi
-
-	case $WINEARCH in
-		win32)
-			local dll32_path="$WINEPREFIX"/drive_c/windows/system32
-			;;
-		win64)
-			local dll32_path="$WINEPREFIX"/drive_c/windows/syswow64
-			local dll64_path="$WINEPREFIX"/drive_c/windows/system32
-			;;
-	esac
-
-	# generate file list, dir x32 and x64 must contain same name dll files
-	local -a ar
-	readarray -t ar<<<"$( find "$idir"/x32 -mindepth 1 -maxdepth 1 -type f -name '*.*' | sed -En 's/^.*\///gp' | LC_ALL=C sort)"
-	printf "%s\n" "${ar[@]}"
-
 	case $cmd in
 		i | install)
-			local -i i
+			! [ -f "$WINEPREFIX"/drive_c/swh-"$pakname".install ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
+			( [[ "$pakname" == 'dxvk' ]] && [ -f "$WINEPREFIX"/drive_c/swh-d9vk.install ] ) && swh_error "${FUNCNAME[0]}: dxvk conflict with d9vk"
+			( [[ "$pakname" == 'd9vk' ]] && [ -f "$WINEPREFIX"/drive_c/swh-dxvk.install ] ) && swh_error "${FUNCNAME[0]}: d9vk conflict with dxvk"
+
+			# generate file list, dir x32 and x64 must contain same name dll files
+			typeset -a ar
+			readarray -t ar<<<"$( find "$idir"/x32 -mindepth 1 -maxdepth 1 -type f -name '*.*' -printf %f\\n | LC_ALL=C sort)"
+			[ -z "${ar[0]}" ] && swh_error "${FUNCNAME[0]}: empty file list, x32 dir is missing or empty"
+			#debug
+			printf "%s\n" "${ar[@]}"
+
+			typeset -i i
 			for (( i=0; i<${#ar[@]}; i++ )); do
-				! [ -f "$dll32_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
-				[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
-				ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
-				wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 >/dev/null
+				case "$WINEARCH" in
+					win32)
+						if ! ( [[ "$pakname" == 'dxvk' || "$pakname" == 'd9vk' ]] && [[ "$arg" == '--without-dxgi' ]] && [[ "${ar[i]}" =~ [dD][xX][gG][iI].[dD][lL][lL] ]] ); then
+							[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
+							ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
+							wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 > /dev/null
+						else
+							:
+						fi
+						;;
+					win64)
+						if ! ( [[ "$pakname" == 'dxvk' || "$pakname" == 'd9vk' ]] && [[ "$arg" == '--without-dxgi' ]] && [[ "${ar[i]}" =~ [dD][xX][gG][iI].[dD][lL][lL] ]] ); then
+							[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
+							ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
+							[ -f "$dll64_path"/"${ar[i]}" ] && \mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
+							ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"
+							# use wine64 reg ?
+							wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 > /dev/null
+						else
+							:
+						fi
+						;;
+				esac
 			done
-			if [ X"$WINEARCH" == X"win64" ]; then
-				for (( i=0; i<${#ar[@]}; i++ )); do
-					! [ -f "$dll64_path"/"${ar[i]}"."$pakname" ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
-					[ -f "$dll64_path"/"${ar[i]}" ] && \mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
-					ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"
-					wine64 reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 >/dev/null
-				done
-			fi
 			printf "%s\n" "${ar[@]}" > "$WINEPREFIX"/drive_c/swh-"$pakname".install
-			# install dxvk 1.0 --without-dxgi
-			if [ X"$pakname" == X"dxvk" ] && [ X"$arg" == X"--without-dxgi" ] ; then
-				\mv -f "$dll32_path"/dxgi.dll."$pakname" "$dll32_path"/dxgi.dll
-				wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f 1 >/dev/null
-				if [ X"$WINEARCH" == X"win64" ]; then
-					\mv -f "$dll64_path"/dxgi.dll."$pakname" "$dll64_path"/dxgi.dll
-					wine64 reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "dxgi.dll" /f 1 >/dev/null
-				fi
-			fi
 			;;
 		u | uninstall)
 			[ -f "$WINEPREFIX"/drive_c/swh-"$pakname".install ] || swh_error "$pakname is not installed"
-			local -a aru
+			typeset -a aru
 			readarray -t aru < "$WINEPREFIX"/drive_c/swh-"$pakname".install
-			local -i j
+			typeset -i j
 			for (( j=0; j<${#aru[@]}; j++ )); do
-				if [ -f "$dll32_path"/"${aru[j]}"."$pakname" ]; then
-					\mv -f "$dll32_path"/"${aru[j]}"."$pakname" "$dll32_path"/"${aru[j]}"
-					wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${aru[j]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /f 1 >/dev/null
-
-					if [ X"$WINEARCH" == X"win64" ]; then
-						\mv -f "$dll64_path"/"${aru[j]}"."$pakname" "$dll64_path"/"${aru[j]}"
-						# DO NOT RUN `wine64 reg delete` IF DLL REGISTERED AS *FOO.DLL
-					fi
-				else
-					\rm -f "$dll32_path"/"${aru[j]}"
-					wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${aru[j]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /f 1 >/dev/null
-					if [ X"$WINEARCH" == X"win64" ]; then
-						\rm -f "$dll64_path"/"${aru[j]}"
-						# DO NOT RUN `wine64 reg delete` IF DLL REGISTERED AS *FOO.DLL
-					fi
-				fi
+				case "$WINEARCH" in
+					win32)
+						if [ -f "$dll32_path"/"${aru[j]}"."$pakname" ]; then
+							\mv -f "$dll32_path"/"${aru[j]}"."$pakname" "$dll32_path"/"${aru[j]}"
+						else
+							\rm -f "$dll32_path"/"${aru[j]}"
+						fi
+						wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "${aru[j]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /f 1 > /dev/null
+						;;
+					win64)
+						if [ -f "$dll32_path"/"${aru[j]}"."$pakname" ]; then
+							\mv -f "$dll32_path"/"${aru[j]}"."$pakname" "$dll32_path"/"${aru[j]}"
+							\mv -f "$dll64_path"/"${aru[j]}"."$pakname" "$dll64_path"/"${aru[j]}"
+						else
+							\rm -f "$dll32_path"/"${aru[j]}"
+							\rm -f "$dll64_path"/"${aru[j]}"
+						fi
+						wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${aru[j]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /f 1 > /dev/null
+						;;
+				esac
 			done
 			;;
 		*)
 			swh_error "${FUNCNAME[0]}: unknown command, supported command: install, uninstall"
 			;;
 	esac
+
+	unset pakname cmd arg dll32_path dll64_path idir ar i aru j
 }
 
 swh_objdump()
 {
-	if (( $# == 1 )); then
-		case "$1" in
-			[1-9] | [1-9][0-9])
-				i=$1
-				local wpath
-				local ldrv
-				local ldf
-				local lfpath
-				wpath="${dir[i]}\\${exe[i]}" 
-				ldrv="$( echo "$wpath" | cut -d : -f 1 | tr '[:upper:]' '[:lower:]' )"
-				ldf="$( echo "$wpath" | cut -d : -f 2- | tr $'\\' '/' )"
-				lfpath="$WINEPREFIX"/dosdevices/"$ldrv":"$ldf"
-				[ -f "$lfpath" ] || swh_error "file not found"
-				printf "\nThis function use linux command \`file\` and \`objdump -p\` scan %s , help you decide proper WINEARCH and dll override\nTip: Reports each DLL as it's loaded using Debug Channels: WINEDEBUG=fixme-all,+loaddll\n\n" "${exe[i]}"
-				file "$lfpath"
-				printf "\n"
-				objdump -p "$lfpath" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
-				unset wpath
-				unset ldrv
-				unset ldf
-				unset lfpath
-				;;
-			*)
-				swh_error "wrong argument"
-				;;
-		esac
-	else
-		swh_error "wrong argument count"
-	fi
+	(( $# == 1 )) || swh_error "allowed argument count : 1"
+	case "$1" in
+		[1-9] | [1-9][0-9])
+			typeset -i i=$1
+			typeset ldrv
+			typeset ldf
+			typeset lfn
+			ldrv="$( echo "${exe[i]}" | cut -d : -f 1 | tr '[:upper:]' '[:lower:]' )"
+			ldf="$( echo "${exe[i]}" | cut -d : -f 2- | tr $'\\' '/' )"
+			lfn="$WINEPREFIX"/dosdevices/"$ldrv":"$ldf"
+			[ -f "$lfn" ] || swh_error "file not found"
+			printf "\nThis function use linux command \`file\` and \`objdump -p\` scan %s , help you decide proper WINEARCH and dll override\nTip: Reports each DLL as it's loaded using Debug Channels: WINEDEBUG=fixme-all,+loaddll\n\n" "${exe[i]}"
+			file "$lfn"
+			printf "\n"
+			objdump -p "$lfn" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
+			unset ldrv ldf lfn
+			;;
+		*)
+			swh_error "No exe to scan. usage example: 'launcher od 1'"
+			;;
+	esac
 }
 
 # clean open with list
@@ -402,320 +449,16 @@ rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*\n\
 rm -f ~/.local/share/mime/application/x-wine-extension*\n\
 \n\
 "
-	read -r -p '(y/n)' temp_var
-	{ [ X"$temp_var" == X'Y' ] || [ X"$temp_var" == X'y' ] ; } && \
-		{
-			\rm -f ~/.local/share/mime/packages/x-wine*;
-			\rm -f ~/.local/share/applications/wine-extension*;
-			\rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*;
-			\rm -f ~/.local/share/mime/application/x-wine-extension*;
-		}
-	unset temp_var
-}
-
-## work with winetricks, use .verb file
-# d3dcompiler_42, 32bit and 64bit
-swh_ww_d3dcompiler_42()
-{
-	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
-	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
-	verbfile='swh_ww_d3dcompiler_42.verb'
-	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
-w_metadata swh_ww_d3dcompiler_42 dlls \
-	title="MS d3dcompiler_42.dll (Simple Wine Helper)" \
-	publisher="Microsoft" \
-	year="2010" \
-	media="download" \
-	file1="../directx9/directx_Jun2010_redist.exe" \
-	installed_file1="$W_SYSTEM32_DLLS_WIN/d3dcompiler_42.dll" \
-
-load_swh_ww_d3dcompiler_42()
-{
-	dllname=d3dcompiler_42
-
-	helper_directx_Jun2010
-
-	w_try_cabextract -d "$W_TMP" -L -F "*$dllname*x86*" "$W_CACHE"/directx9/$DIRECTX_NAME
-	for x in "$W_TMP"/*.cab; do
-		w_try_cabextract -d "$W_SYSTEM32_DLLS" -L -F "$dllname.dll" "$x"
-	done
-	if test "$W_ARCH" = "win64"; then
-		w_try_cabextract -d "$W_TMP" -L -F "*$dllname*x64*" "$W_CACHE"/directx9/$DIRECTX_NAME
-		for x in "$W_TMP"/*x64.cab
-		do
-			w_try_cabextract -d "$W_SYSTEM64_DLLS" -L -F "$dllname.dll" "$x"
-		done
+	typeset ch
+	read -r -p '(y/n)' ch
+	if [[ "$ch" =~ Y|y ]]; then
+		\rm -f ~/.local/share/mime/packages/x-wine*
+		\rm -f ~/.local/share/applications/wine-extension*
+		\rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*
+		\rm -f ~/.local/share/mime/application/x-wine-extension*
 	fi
 
-	w_override_dlls native $dllname
-}
-__EOF__
-	winetricks "$swh_tempdir/$verbfile"
-	rm -rf "$swh_tempdir"
-}
-
-## extract dotnet40 on 64bit prefix
-# note: winetricks use sha256sum to verify file, list use sha1sum
-swh_ww_dotnet40extract()
-{
-	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
-	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
-	verbfile='swh_ww_dotnet40extract.verb'
-	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
-w_metadata swh_ww_dotnet40extract dlls \
-	title="Microsoft .NET Framework 4 extract (Simple Wine Helper)" \
-	publisher="Microsoft" \
-	year="2011" \
-	media="download" \
-	conflicts="dotnet20 dotnet20sdk dotnet20sp1 dotnet20sp2 dotnet35sp1 dotnet40 dotnet46 dotnet461 dotnet462 vjrun20" \
-	file1="dotNetFx40_Full_x86_x64.exe" \
-	destlist="dotnet40list" \
-	installed_file1="c:/windows/swh_ww_dotnet40extract.installed.workaround" \
-
-load_swh_ww_dotnet40extract()
-{
-	if [ X"$WINEARCH" != X'win64' ]; then
-		w_die "This function is made for 64bit wineprefix."
-	fi
-	if [ X"$runner" == X'wine' ]; then
-		export runner=wine64
-		printf "[warn]: runner=wine64\n"
-	fi
-
-	w_download https://download.microsoft.com/download/9/5/A/95A9616B-7A37-4AF6-BC36-D6EA96C8DAAE/dotNetFx40_Full_x86_x64.exe 65e064258f2e418816b304f646ff9e87af101e4c9552ab064bb74d281c38659f
-	w_download https://raw.githubusercontent.com/tim110011/Simple-Wine-Helper/master/dotnet40list f1dfa277882c6963fc17d4e5dba7449e47cf8f300ec56f517227b6f036a01b97
-	w_call remove_mono
-
-	w_try_cd "$W_TMP"
-	mkdir exedir
-	mkdir netfx_all
-	w_try_7z "$W_TMP"/exedir "$W_CACHE"/$W_PACKAGE/$file1
-	w_try_7z "$W_TMP"/netfx_all "$W_TMP"/exedir/netfx_Core.mzz
-	w_try_7z "$W_TMP"/netfx_all "$W_TMP"/exedir/netfx_Extended.mzz
-
-	w_try_cd "$W_TMP"/netfx_all
-	sha1sum * >../sourcelist.txt
-
-	exec 0<"$W_CACHE/$W_PACKAGE/$destlist"
-	while read line; do
-		sha1sumkey=$( printf "%s\n" $line | cut -d' ' -f 1 )
-		destwindows=$( printf "%s\n" $line | cut -d' ' -f 2- )
-		sourcefile=$( grep -w -m 1 $sha1sumkey "$W_TMP"/sourcelist.txt | cut -d' ' -f 3- )
-		if [ "$sourcefile" ]; then
-			destdir="$( dirname "$WINEPREFIX/$destwindows" )"
-			if ! [ -d "$destdir" ]; then
-				mkdir -p "$destdir"
-			fi
-			\cp -rfv "$sourcefile" "$WINEPREFIX/$destwindows"
-		else
-			printf "[warn]: missing file: %s %s\n" $sha1sumkey $destwindows
-		fi
-	done
-
-	w_override_dlls native mscoree
-
-	"$runner" reg add "HKLM\\Software\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full" /v Install /t REG_DWORD /d 0001 /f
-	"$runner" reg add "HKLM\\Software\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full" /v Version /t REG_SZ /d "4.0.30319" /f
-
-	w_try touch "${W_WINDIR_UNIX}/swh_ww_dotnet40extract.installed.workaround"
-
-}
-
-__EOF__
-	winetricks "$swh_tempdir/$verbfile"
-	rm -rf "$swh_tempdir"
-}
-
-## extract dotnet472 on 64bit prefix, run after ww dotnet40, dot not call remove_mono
-# note: winetricks use sha256sum to verify file, list use sha1sum
-swh_ww_dotnet472extract()
-{
-	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
-	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
-	verbfile='swh_ww_dotnet472extract.verb'
-	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
-w_metadata swh_ww_dotnet472extract dlls \
-	title="Microsoft .NET Framework 4.7.2 extract (Simple Wine Helper)" \
-	publisher="Microsoft" \
-	year="2018" \
-	media="download" \
-	conflicts="" \
-	file1="NDP472-KB4054530-x86-x64-AllOS-ENU.exe" \
-	destlist="dotnet472list"
-	installed_file1="c:/windows/swh_ww_dotnet472extract.installed.workaround" \
-
-load_swh_ww_dotnet472extract()
-{
-
-	if [ X"$WINEARCH" != X'win64' ]; then
-		w_die "This function is made for 64bit wineprefix."
-	fi
-	if [ X"$runner" == X'wine' ]; then
-		export runner=wine64
-		printf "[warn]: runner=wine64\n"
-	fi
-
-	w_download https://download.microsoft.com/download/6/E/4/6E48E8AB-DC00-419E-9704-06DD46E5F81D/NDP472-KB4054530-x86-x64-AllOS-ENU.exe c908f0a5bea4be282e35acba307d0061b71b8b66ca9894943d3cbb53cad019bc
-	w_download https://raw.githubusercontent.com/tim110011/Simple-Wine-Helper/master/dotnet472list 24d257c079aaf070ce9928beda53da19719164c1af6853e69c769895eec252ac
-
-	w_try_cd "$W_TMP"
-	mkdir exedir
-	mkdir netfx_all
-
-	w_try_7z "$W_TMP"/exedir "$W_CACHE"/$W_PACKAGE/$file1
-	w_try_7z "$W_TMP"/netfx_all "$W_TMP"/exedir/netfx_Full.mzz
-
-	w_try_cd "$W_TMP"/netfx_all
-	sha1sum * >../sourcelist.txt
-
-	exec 0<"$W_CACHE/$W_PACKAGE/$destlist"
-	while read line; do
-		sha1sumkey=$( printf "%s\n" $line | cut -d' ' -f 1 )
-		destwindows=$( printf "%s\n" $line | cut -d' ' -f 2- )
-		sourcefile=$( grep -w -m 1 $sha1sumkey "$W_TMP"/sourcelist.txt | cut -d' ' -f 3- )
-		if [ "$sourcefile" ]; then
-			destdir="$( dirname "$WINEPREFIX/$destwindows" )"
-			if ! [ -d "$destdir" ]; then
-				mkdir -p "$destdir"
-			fi
-			\cp -rfv "$sourcefile" "$WINEPREFIX/$destwindows"
-		else
-			printf "[warn]: missing file: %s %s\n" $sha1sumkey $destwindows
-		fi
-	done
-
-	w_override_dlls native mscoree
-
-	"$runner" reg add "HKLM\\Software\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full" /v Install /t REG_DWORD /d 0001 /f
-	"$runner" reg add "HKLM\\Software\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full" /v Version /t REG_SZ /d "4.0.30319" /f
-
-	w_try touch "${W_WINDIR_UNIX}/swh_ww_dotnet472extract.installed.workaround"
-
-}
-
-__EOF__
-	winetricks "$swh_tempdir/$verbfile"
-	rm -rf "$swh_tempdir"
-}
-
-## extract vcrun2015
-swh_ww_vcrun2015()
-{
-	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
-	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
-	verbfile='swh_x_vcrun2015.verb'
-	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
-w_metadata vcrun2015 dlls \
-    title="Visual C++ 2015 libraries (concrt140.dll,mfc140.dll,mfc140u.dll,mfcm140.dll,mfcm140u.dll,msvcp140.dll,vcamp140.dll,vccorlib140.dll,vcomp140.dll,vcruntime140.dll)" \
-    publisher="Microsoft" \
-    year="2015" \
-    media="download" \
-    conflicts="vcrun2017" \
-    file1="vc_redist.x86.exe" \
-    installed_file1="$W_SYSTEM32_DLLS_WIN/mfc140.dll"
-
-load_vcrun2015()
-{
-    # https://www.microsoft.com/en-us/download/details.aspx?id=48145
-    # 2015/10/12: fdd1e1f0dcae2d0aa0720895eff33b927d13076e64464bb7c7e5843b7667cd14
-    w_download https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x86.exe fdd1e1f0dcae2d0aa0720895eff33b927d13076e64464bb7c7e5843b7667cd14
-
-    if w_workaround_wine_bug 37781; then
-        w_warn "This may fail in non-XP mode, see https://bugs.winehq.org/show_bug.cgi?id=37781"
-    fi
-
-    w_override_dlls native api_ms_win_core_datetime_l1_1_0.dll api_ms_win_core_debug_l1_1_0.dll api_ms_win_core_errorhandling_l1_1_0.dll api_ms_win_core_file_l1_1_0.dll api_ms_win_core_file_l1_2_0.dll api_ms_win_core_file_l2_1_0.dll api_ms_win_core_handle_l1_1_0.dll api_ms_win_core_heap_l1_1_0.dll api_ms_win_core_interlocked_l1_1_0.dll api_ms_win_core_libraryloader_l1_1_0.dll api_ms_win_core_localization_l1_2_0.dll api_ms_win_core_memory_l1_1_0.dll api_ms_win_core_namedpipe_l1_1_0.dll api_ms_win_core_processenvironment_l1_1_0.dll api_ms_win_core_processthreads_l1_1_0.dll api_ms_win_core_processthreads_l1_1_1.dll api_ms_win_core_profile_l1_1_0.dll api_ms_win_core_rtlsupport_l1_1_0.dll api_ms_win_core_string_l1_1_0.dll api_ms_win_core_synch_l1_1_0.dll api_ms_win_core_synch_l1_2_0.dll api_ms_win_core_sysinfo_l1_1_0.dll api_ms_win_core_timezone_l1_1_0.dll api_ms_win_core_util_l1_1_0.dll api_ms_win_crt_conio_l1_1_0.dll api_ms_win_crt_convert_l1_1_0.dll api_ms_win_crt_environment_l1_1_0.dll api_ms_win_crt_filesystem_l1_1_0.dll api_ms_win_crt_heap_l1_1_0.dll api_ms_win_crt_locale_l1_1_0.dll api_ms_win_crt_math_l1_1_0.dll api_ms_win_crt_multibyte_l1_1_0.dll api_ms_win_crt_private_l1_1_0.dll api_ms_win_crt_process_l1_1_0.dll api_ms_win_crt_runtime_l1_1_0.dll api_ms_win_crt_stdio_l1_1_0.dll api_ms_win_crt_string_l1_1_0.dll api_ms_win_crt_time_l1_1_0.dll api_ms_win_crt_utility_l1_1_0.dll concrt140.dll mfc140chs.dll mfc140cht.dll mfc140deu.dll mfc140.dll mfc140enu.dll mfc140esn.dll mfc140fra.dll mfc140ita.dll mfc140jpn.dll mfc140kor.dll mfc140rus.dll mfc140u.dll mfcm140.dll mfcm140u.dll msvcp140.dll ucrtbase.dll vcamp140.dll vccorlib140.dll vcomp140.dll vcruntime140.dll
-
-    w_set_winver winxp
-
-    w_try_cd "$W_CACHE"/"$W_PACKAGE"
-    w_try "$WINE" vc_redist.x86.exe $W_UNATTENDED_SLASH_Q
-
-    case "$W_ARCH" in
-        win64)
-            # Also install the 64-bit version
-            # 2015/10/12: 5eea714e1f22f1875c1cb7b1738b0c0b1f02aec5ecb95f0fdb1c5171c6cd93a3
-            w_download https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x64.exe 5eea714e1f22f1875c1cb7b1738b0c0b1f02aec5ecb95f0fdb1c5171c6cd93a3
-            if w_workaround_wine_bug 30713 "Manually extracting the 64-bit dlls"; then
-                rm -f "$W_TMP"/*  # Avoid permission error
-                rm -f "$W_TMP"/tmpdir_vcrun2015/*
-                w_try_cabextract --directory="$W_TMP" vc_redist.x64.exe
-                w_try_cabextract --directory="$W_TMP"/tmpdir_vcrun2015 "$W_TMP/a10"
-                w_try_cabextract --directory="$W_TMP"/tmpdir_vcrun2015 "$W_TMP/a11"
-                for f in "$W_TMP"/tmpdir_vcrun2015/*.dll; do
-                    \cp -rfv "$f" "$W_SYSTEM64_DLLS"
-                    "$WINE" reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$f" /f
-                done
-            else
-                w_try "$WINE" vc_redist.x64.exe $W_UNATTENDED_SLASH_Q
-            fi
-            ;;
-    esac
-}
-__EOF__
-	winetricks "$swh_tempdir/$verbfile"
-	rm -rf "$swh_tempdir"
-}
-
-## extract vcrun2017
-swh_ww_vcrun2017()
-{
-	swh_tempdir="$( mktemp -d "${TMPDIR:-/tmp}/swhtemp.XXXXXXXX" )"
-	{ [ -d "$swh_tempdir" ] && [ -w "$swh_tempdir" ] ; } || swh_error "${FUNCNAME[0]}: mktemp error."
-	verbfile='swh_x_vcrun2017.verb'
-	cat > "$swh_tempdir/$verbfile" <<'__EOF__'
-w_metadata vcrun2017 dlls \
-    title="Visual C++ 2017 libraries (concrt140.dll,mfc140.dll,mfc140u.dll,mfcm140.dll,mfcm140u.dll,msvcp140.dll,vcamp140.dll,vccorlib140.dll,vcomp140.dll,vcruntime140.dll)" \
-    publisher="Microsoft" \
-    year="2017" \
-    media="download" \
-    conflicts="vcrun2015" \
-    file1="VC_redist.x86.exe" \
-    installed_file1="$W_SYSTEM32_DLLS_WIN/mfc140.dll"
-
-# FIXME: There's a conflict with vcrun2015 because the dll's version number for 2017 and 2015 are the same. Correct behavior should be compared to native Windows.
-load_vcrun2017()
-{
-    # https://go.microsoft.com/fwlink/?LinkId=746571
-    # 2017/10/02: 2da11e22a276be85970eaed255daf3d92af84e94142ec04252326a882e57303e
-    w_download https://download.visualstudio.microsoft.com/download/pr/11100229/78c1e864d806e36f6035d80a0e80399e/VC_redist.x86.exe 2da11e22a276be85970eaed255daf3d92af84e94142ec04252326a882e57303e
-
-    if w_workaround_wine_bug 37781; then
-        w_warn "This may fail in non-XP mode, see https://bugs.winehq.org/show_bug.cgi?id=37781"
-    fi
-
-    w_override_dlls native api_ms_win_core_console_l1_1_0.dll api_ms_win_core_datetime_l1_1_0.dll api_ms_win_core_debug_l1_1_0.dll api_ms_win_core_errorhandling_l1_1_0.dll api_ms_win_core_file_l1_1_0.dll api_ms_win_core_file_l1_2_0.dll api_ms_win_core_file_l2_1_0.dll api_ms_win_core_handle_l1_1_0.dll api_ms_win_core_heap_l1_1_0.dll api_ms_win_core_interlocked_l1_1_0.dll api_ms_win_core_libraryloader_l1_1_0.dll api_ms_win_core_localization_l1_2_0.dll api_ms_win_core_memory_l1_1_0.dll api_ms_win_core_namedpipe_l1_1_0.dll api_ms_win_core_processenvironment_l1_1_0.dll api_ms_win_core_processthreads_l1_1_0.dll api_ms_win_core_processthreads_l1_1_1.dll api_ms_win_core_profile_l1_1_0.dll api_ms_win_core_rtlsupport_l1_1_0.dll api_ms_win_core_string_l1_1_0.dll api_ms_win_core_synch_l1_1_0.dll api_ms_win_core_synch_l1_2_0.dll api_ms_win_core_sysinfo_l1_1_0.dll api_ms_win_core_timezone_l1_1_0.dll api_ms_win_core_util_l1_1_0.dll api_ms_win_crt_conio_l1_1_0.dll api_ms_win_crt_convert_l1_1_0.dll api_ms_win_crt_environment_l1_1_0.dll api_ms_win_crt_filesystem_l1_1_0.dll api_ms_win_crt_heap_l1_1_0.dll api_ms_win_crt_locale_l1_1_0.dll api_ms_win_crt_math_l1_1_0.dll api_ms_win_crt_multibyte_l1_1_0.dll api_ms_win_crt_private_l1_1_0.dll api_ms_win_crt_process_l1_1_0.dll api_ms_win_crt_runtime_l1_1_0.dll api_ms_win_crt_stdio_l1_1_0.dll api_ms_win_crt_string_l1_1_0.dll api_ms_win_crt_time_l1_1_0.dll api_ms_win_crt_utility_l1_1_0.dll concrt140.dll mfc140chs.dll mfc140cht.dll mfc140deu.dll mfc140.dll mfc140enu.dll mfc140esn.dll mfc140fra.dll mfc140ita.dll mfc140jpn.dll mfc140kor.dll mfc140rus.dll mfc140u.dll mfcm140.dll mfcm140u.dll msvcp140.dll ucrtbase.dll vcamp140.dll vccorlib140.dll vcomp140.dll vcruntime140.dll
-
-    w_set_winver winxp
-
-    w_try_cd "$W_CACHE/$W_PACKAGE"
-    w_try "$WINE" VC_redist.x86.exe $W_UNATTENDED_SLASH_Q
-
-    case "$W_ARCH" in
-        win64)
-            # Also install the 64-bit version
-            # https://go.microsoft.com/fwlink/?LinkId=746572
-            # 2017/10/02: 7434bf559290cccc3dd3624f10c9e6422cce9927d2231d294114b2f929f0e465
-            w_download https://download.visualstudio.microsoft.com/download/pr/11100230/15ccb3f02745c7b206ad10373cbca89b/VC_redist.x64.exe 7434bf559290cccc3dd3624f10c9e6422cce9927d2231d294114b2f929f0e465
-            if w_workaround_wine_bug 30713 "Manually extracting the 64-bit dlls"; then
-                rm -f "$W_TMP"/*  # Avoid permission error
-                rm -f "$W_TMP"/tmpdir_vcrun2017/*
-                w_try_cabextract --directory="$W_TMP" VC_redist.x64.exe
-                w_try_cabextract --directory="$W_TMP"/tmpdir_vcrun2017 "$W_TMP/a10"
-                w_try_cabextract --directory="$W_TMP"/tmpdir_vcrun2017 "$W_TMP/a11"
-                for f in "$W_TMP"/tmpdir_vcrun2017/*.dll; do
-                    \cp -rfv "$f" "$W_SYSTEM64_DLLS"
-                    "$WINE" reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$f" /f
-                done
-            else
-                w_try "$WINE" VC_redist.x64.exe $W_UNATTENDED_SLASH_Q
-            fi
-            ;;
-    esac
-}
-__EOF__
-	winetricks "$swh_tempdir/$verbfile"
-	rm -rf "$swh_tempdir"
+	unset ch
 }
 
 # Chinese fonts replacement: use google-noto-cjk ttc fonts
@@ -777,7 +520,7 @@ load_swh_ww_cnfonts_noto()
 }
 __EOF__
 	winetricks "$swh_tempdir/$verbfile"
-	rm -rf "$swh_tempdir"
+	\rm -rf "$swh_tempdir"
 }
 
 swh_help()
@@ -788,39 +531,52 @@ Simple Wine Helper $SWH_VERSION
 Usage: APP_LAUNCHER COMMAND [argument]
 
 Commands:
+
 s                           Store wine to your cellar dir
+
 c                           Run winecfg, Create wineprefix
+
 d                           Download wine from winehq fedora repository, please use valid value in \$build like: 4.5 ; 4.5-staging ; 3.0.5 ; 4.0-rc7 . before use this feature, make sure you have satisfied wine dependencies
+
 i                           Inherit old profile files, useful when upgrading from old frefixes: copy these dirs from one old prefix to current prefix: 'C:\users\USERNAME\AppData' 'C:\users\USERNAME\Application Data' 'C:\users\USERNAME\Local Settings'
-cdd                         Use after c or cc, create shared drive D: files in this dir is visable by all wine prefixes (default path: '\$HOME/swh/drives/drive_d')
-cde                         Use after c or cc, create pirvate drive E: files in this dir is visable by this wine prefix only (default path: '\$HOME/swh/drives/\$prefix/drive_e')
+
+dr [drive]                  see swh_profile
+  d                             create shared drive D: files in this dir is visable by all wine prefixes
+  e                             create pirvate drive E: files in this dir is visable by this wine prefix only
+  f                             create shared drive F: on another disk, files in this dir is visable by all wine prefixes
+  g                             create pirvate drive G: on another disk, files in this dir is visable by this wine prefix only
+
 r [registry file]           Run regedit [regfile]
+
 l [application]             Launch specified application: see Examples below
 1                           Launch 1st application
 2                           Launch 2nd application
 99                          Launch 99th application, swh now supports up to 99 apps in one launcher!
+
 w [winetricks command]      winetricks command
-wf                          fonts override, use native windows `Fonts` dir
+
+wf                          fonts override, use native windows 'Fonts' dir
+
 ww [swh command]            swh command, these commands need winetricks as dependency, but they are NOT winetricks command
-  ww d3dcompiler_42             install d3dcompiler_42, 32bit and 64bit
-  ww dotnet40                   (EXPERIMENTIAL FUNCTION) Extract dotnet40 files only, on 64bit prefix
-  ww dotnet472                  (EXPERIMENTIAL FUNCTION) Extract dotnet472 files only, on 64bit prefix. use this after using ww dotnet40
-  ww vcrun2015                  (EXPERIMENTIAL FUNCTION) Extract and override vcrun2015 files on 64bit prefix
-  ww vcrun2017                  (EXPERIMENTIAL FUNCTION) Extract and override vcrun2017 files on 64bit prefix
+  cnfonts                       (EXPERIMENTIAL FUNCTION) don't use
+  (ALL OTHER EXPERIMENTIAL FUNCTIONS REMOVED, PLEASE USE WINETRICKS)
+
 3rd dxvk i 					Install dxvk 0.5x 0.6x 0.7x 0.8x 0.9x 1.0 ( create symbolic link )
 3rd dxvk i --without-dxgi 	Same as above, without-dxgi see https://github.com/doitsujin/dxvk
 3rd dxvk u 					Uninstall dxvk
 3rd faudio i 				Install faudio
 3rd faudio u 				Uninstall faudio
+
 cleanopenwith | cow         Clean the Open With List
+
 NO argument                Show a small menu
+
 
 Examples:
   APP_LAUNCHER l 'C:\a b\xy.exe'    Run specified application
   APP_LAUNCHER l cmd                Wine cmd
   APP_LAUNCHER l control            Wine Control Panel
   APP_LAUNCHER w d3dcompiler_47     This is a winetricks command, it installs d3dcompiler_47 override
-  APP_LAUNCHER ww d3dcompiler_42    This is a swh command, it installs d3dcompiler_42 override
   APP_LAUNCHER 3rd dxvk i 		    This is a swh command, it installs d3dcompiler_42 override
 
 Quick Guide:
@@ -834,46 +590,30 @@ Quick Guide:
     valid winecfg path example: '$HOME/swh/cellar/win64/4.0-rc6-staging/bin/winecfg'
   This directory should contain these dirs: bin lib lib64
 2. Install swh and winetricks, perferred dir is '\$HOME/bin', modify your .bashrc file add it to '\$PATH'
-3. Make a copy of example_launcher. Rename it and modify settings
-5. Store wine into your cellar dir: APP_LAUNCHER s
-6. Create wineprefix: APP_LAUNCHER c
-7A. Wine configuration example for steam users:
-  [Drives] -> [Add] -> [Select Drive Letter] -> [D:] -> [OK] -> [Browse] -> "/home/USERNAME/swh/drives/drive_d/"
-  swh command cdd will also do this work.
-  Put SteamSetup.exe in that dir, drive D: 
-  make a copy of example_launcher and modify it's content:
+3. Make a copy of example_launcher. Rename it to "your_launcher" and modify settings
+5. Store wine into your cellar dir: your_launcher s
+6. Create wineprefix: your_launcher c
+7. "your_app_launcher" modify example:
     modify \$prefix as comment suggest
     modify \$build as comment suggest
     modify \$install as comment suggest
     modify \$WINEARCH  as comment suggest
-    dir[1]='D:\'
-    exe[1]='SteamSetup.exe'
-  Save new file as steam_launcher, run command "chmod u+x steam_launcher" make it executable
-  Use command "steam_launcher 1" to launch SteamSetup.exe
-  Steam settings:
-    Steam settings -> [Downloads] -> Set Default SteamLibrary Folder to D:\SteamLibrary
-  Modify steam_launcher as:
-    dir[2]='C:\Program Files (x86)\Steam'
-    exe[2]='Steam.exe'
-  Save file, use command "steam_launcher 2" to launch steam
-7B. Old method: Link or copy or move windows application to wineprefix drive_c:
-	path example: /home/USERNAME/swh/table/win64/4.0-rc5-staging/example/drive_c/
-8. Tweak advanced settings via winetricks: APP_LAUNCHER w
-9. Launch 1st application: APP_LAUNCHER 1
-10. Launch 2nd application: APP_LAUNCHER 2
+    exe[1]='C:\your_app_dir\example.exe'  This is full path of your exe
+  run command "chmod u+x your_launcher" make it executable
+  Use command "your_launcher 1" to launch example.exe
+
+8. Tweak advanced settings via winetricks: your_launcher w
 
 NOTE:
-0. The above guide about install steam client may be obsoleted, just give you a hint: install software outside drive c: means it is seperated from wineprefix dir
+
 1. Using winetricks: "Select the default wineprefix" means select THIS wineprefix
 2. This script is used per user, not "Install on this machine for everyone" because many command use username as argument
-3. Get dxvk binary release from https://github.com/doitsujin/dxvk/releases
-4. wine-4.3 already include faudio, when using older version wine, get faudio binary release from https://github.com/Kron4ek/FAudio-Builds/releases
 __EOF__
 }
 
 #main()
 #{
-( uname -s | grep -i "Linux" >/dev/null 2>&1 ) || swh_error "This script runs on Linux!"
+( uname -s | grep -i "Linux" > /dev/null 2>&1 ) || swh_error "This script runs on Linux!"
 [ -v SWH_LAUNCHER ] || \
 	{
 		printf "No launcher or launcher too old, please remake launcher\n"
@@ -881,7 +621,7 @@ __EOF__
 		swh_help;
 		exit 1
 	}
-swh_ckdep winetricks
+
 swh_config
 if (( $# > 0 )); then
 	case "$1" in
@@ -896,6 +636,7 @@ if (( $# > 0 )); then
 				if [ -z "$invoker_args_str" ]; then
 					"$invoker" "$runner" "$@"
 				else
+					#shellcheck disable=2086
 					"$invoker" $invoker_args_str "$runner" "$@"
 				fi
 			fi
@@ -904,6 +645,7 @@ if (( $# > 0 )); then
 		fi
 		;;
 	[1-9] | [1-9][0-9])
+		# TODO:	 runas feature not supported now
 		# invoker invoker_args_str runner runas_str exe[i] args[i]
 		# strace --e trace=open,openat wine runas /trustlevel:0x20000 cmd /c start /unix 'C:\Program Files (x86)\Example Software\example.exe' -arg1 -arg2
 		# strace --e trace=open,openat wine example.exe -arg1 -arg2
@@ -911,42 +653,35 @@ if (( $# > 0 )); then
 		swh_init
 		swh_checkprefix
 		i=$1
-		exeupath="$(winepath -u "${exe[i]}")"
-		exeudir="$(dirname "$exeupath")"
-		exeufile="$(basename "$exeupath")"
-		cd "$exeudir" || swh_error "cd $exeudir failed"
-		#exe-x64
-		if ( file "$exeupath" | grep -E 'PE32\+ executable .+ x86-64' ); then
-			if [ X"$WINEARCH" == Xwin64 ] && [ X"$use_wine64" == Xtrue ] && [ X"$runner" == Xwine ]; then runner=wine64 ; fi
+		[ -n "${exe[i]}" ] || swh_error "no such exe"
+		# cd into exe dir, regardless use or not use winestart /d
+		wdir=${exe[i]%\\*}
+		ldir="$(winepath -u "$wdir")"
+		cd "$ldir"
+		if [ X"$use_winestart" == X'true' ];then
 			if [ -z "$invoker" ]; then
-				"$runner" "$exeufile" ${args[i]}
+				#shellcheck disable=2086
+				"$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
 			else
 				if [ -z "$invoker_args_str" ]; then
-					"$invoker" "$runner" "$exeufile" ${args[i]}
+					#shellcheck disable=2086
+					"$invoker" "$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
 				else
-					"$invoker" $invoker_args_str "$runner" "$exeufile" ${args[i]}
+					#shellcheck disable=2086
+					"$invoker" $invoker_args_str "$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
 				fi
 			fi
-		#exe-x32
-		elif ( file "$exeupath" | grep -E 'PE32 executable .+ Intel 80386' ); then
-			if [ -z "$invoker" ]; then
-				"$runner" "$exeufile" ${args[i]}
-			else
-				if [ -z "$invoker_args_str" ]; then
-					"$invoker" "$runner" "$exeufile" ${args[i]}
-				else
-					"$invoker" $invoker_args_str "$runner" "$exeufile" ${args[i]}
-				fi
-			fi
-		#msi or bat file
 		else
 			if [ -z "$invoker" ]; then
-				"$runner" start /unix "$exeufile" ${args[i]}
+				#shellcheck disable=2086
+				"$runner" "${exe[i]}" ${args[i]}
 			else
 				if [ -z "$invoker_args_str" ]; then
-					"$invoker" "$runner" start /unix "$exeufile" ${args[i]}
+					#shellcheck disable=2086
+					"$invoker" "$runner" "${exe[i]}" ${args[i]}
 				else
-					"$invoker" $invoker_args_str "$runner" start /unix "$exeufile" ${args[i]}
+					#shellcheck disable=2086
+					"$invoker" $invoker_args_str "$runner" "${exe[i]}" ${args[i]}
 				fi
 			fi
 		fi
@@ -985,7 +720,7 @@ if (( $# > 0 )); then
 				opf=("$opd/AppData" "$opd/Application Data" "$opd/Local Settings")
 				npd="$WINEPREFIX/drive_c/users/$me"
 				for (( i=0; i < ${#opf[@]}; i++ )); do
-					\cp -rfv "${opf[i]}" "$npd"
+					\cp -fprv "${opf[i]}" "$npd"
 				done
 				break
 			done
@@ -994,21 +729,51 @@ if (( $# > 0 )); then
 		fi
 		unset temp_var
 		;;
-	cdd)
+	dr)
+		shift
 		swh_init
-		mkdir -p "$drives/drive_d"
-		cd "$WINEPREFIX"/dosdevices
-		if ! [ -L "./d:" ]; then
-			ln -s "$drives/drive_d" d:
-		fi
-		;;
-	cde)
-		swh_init
-		mkdir -p "$drives/$prefix/drive_e"
-		cd "$WINEPREFIX"/dosdevices
-		if ! [ -L "./e:" ]; then
-			ln -s "$drives/$prefix/drive_e" e:
-		fi
+		(( $# == 1 )) || swh_error "wrong argument count"
+		case "$1" in
+			d | D)
+				swh_init
+				[ -d "$d1" ] || swh_error "swh command dr : dir not exist. Check default_d1 in swh_profile OR d1 in $SWH_LAUNCHER"
+				mkdir -p "$d1/drive_d"
+				cd "$WINEPREFIX"/dosdevices
+				if ! [ -L "./d:" ]; then
+					ln -sf "$d1/drive_d" d:
+				fi
+				;;
+			e | E)
+				swh_init
+				[ -d "$d1" ] || swh_error "swh command dr : dir not exist. Check default_d1 in swh_profile OR d1 in $SWH_LAUNCHER"
+				mkdir -p "$d1/$prefix/drive_e"
+				cd "$WINEPREFIX"/dosdevices
+				if ! [ -L "./e:" ]; then
+					ln -sf "$d1/$prefix/drive_e" e:
+				fi
+				;;
+			f | F)
+				swh_init
+				[ -d "$d2" ] || swh_error "swh command dr : dir not exist. Check default_d2 in swh_profile OR d2 in $SWH_LAUNCHER"
+				mkdir -p "$d2/drive_f"
+				cd "$WINEPREFIX"/dosdevices
+				if ! [ -L "./f:" ]; then
+					ln -sf "$d2/drive_f" f:
+				fi
+				;;
+			g | G)
+				swh_init
+				[ -d "$d2" ] || swh_error "swh command dr : dir not exist. Check default_d2 in swh_profile OR d2 in $SWH_LAUNCHER"
+				mkdir -p "$d2/$prefix/drive_g"
+				cd "$WINEPREFIX"/dosdevices
+				if ! [ -L "./g:" ]; then
+					ln -sf "$d2/$prefix/drive_g" g:
+				fi
+				;;
+			*)
+				swh_error "wrong argument, supported argument: d , e , f, g"
+				;;
+		esac
 		;;
 	r | --regedit)
 		swh_init
@@ -1020,6 +785,7 @@ if (( $# > 0 )); then
 		fi
 		;;
 	w | --winetricks)
+		swh_checkdependency winetricks
 		swh_init
 		swh_checkprefix
 		if (( $# == 1 )); then
@@ -1030,6 +796,7 @@ if (( $# > 0 )); then
 		fi
 		;;
 	wf | --windowsfonts)
+		swh_checkdependency winetricks
 		swh_init
 		swh_checkprefix
 		if [ -d "$windowsfonts"  ]; then
@@ -1047,21 +814,6 @@ if (( $# > 0 )); then
 		if (( $# == 2 )); then
 			shift
 			case "$1" in
-				d3dcompiler_42)
-					swh_ww_d3dcompiler_42
-					;;
-				dotnet40)
-					swh_ww_dotnet40extract
-					;;
-				dotnet472)
-					swh_ww_dotnet472extract
-					;;
-				vcrun2015)
-					swh_ww_vcrun2015
-					;;
-				vcrun2017)
-					swh_ww_vcrun2017
-					;;
 				cnfonts | cnfonts_noto)
 					swh_ww_cnfonts_noto
 					;;
@@ -1109,43 +861,34 @@ else
 		i=$REPLY
 		if [ X"$item" == X"help" ]; then swh_help; break; fi
 		if [ X"$item" == X"quit" ]; then break; fi
-		#run ${exe[i]}
-		exeupath="$(winepath -u "${exe[i]}")"
-		exeudir="$(dirname "$exeupath")"
-		exeufile="$(basename "$exeupath")"
-		cd "$exeudir" || swh_error "cd $exeudir failed"
-		#exe-x64
-		if ( file "$exeupath" | grep -E 'PE32\+ executable .+ x86-64' ); then
-			if [ X"$WINEARCH" == Xwin64 ] && [ X"$use_wine64" == Xtrue ] && [ X"$runner" == Xwine ]; then runner=wine64 ; fi
+		[ -n "${exe[i]}" ] || { break; swh_error "no such exe"; }
+		wdir=${exe[i]%\\*}
+		ldir="$(winepath -u "$wdir")"
+		cd "$ldir"
+		if [ X"$use_winestart" == X'true' ];then
 			if [ -z "$invoker" ]; then
-				"$runner" "$exeufile" ${args[i]}
+				#shellcheck disable=2086
+				"$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
 			else
 				if [ -z "$invoker_args_str" ]; then
-					"$invoker" "$runner" "$exeufile" ${args[i]}
+					#shellcheck disable=2086
+					"$invoker" "$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
 				else
-					"$invoker" $invoker_args_str "$runner" "$exeufile" ${args[i]}
+					#shellcheck disable=2086
+					"$invoker" $invoker_args_str "$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
 				fi
 			fi
-		#exe-x32
-		elif ( file "$exeupath" | grep -E 'PE32 executable .+ Intel 80386' ); then
-			if [ -z "$invoker" ]; then
-				"$runner" "$exeufile" ${args[i]}
-			else
-				if [ -z "$invoker_args_str" ]; then
-					"$invoker" "$runner" "$exeufile" ${args[i]}
-				else
-					"$invoker" $invoker_args_str "$runner" "$exeufile" ${args[i]}
-				fi
-			fi
-		#msi or bat file
 		else
 			if [ -z "$invoker" ]; then
-				"$runner" start /unix "$exeufile" ${args[i]}
+				#shellcheck disable=2086
+				"$runner" "${exe[i]}" ${args[i]}
 			else
 				if [ -z "$invoker_args_str" ]; then
-					"$invoker" "$runner" start /unix "$exeufile" ${args[i]}
+					#shellcheck disable=2086
+					"$invoker" "$runner" "${exe[i]}" ${args[i]}
 				else
-					"$invoker" $invoker_args_str "$runner" start /unix "$exeufile" ${args[i]}
+					#shellcheck disable=2086
+					"$invoker" $invoker_args_str "$runner" "${exe[i]}" ${args[i]}
 				fi
 			fi
 		fi
