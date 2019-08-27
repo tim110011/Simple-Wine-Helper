@@ -20,7 +20,7 @@
  **2.9.0 Update Notes**
 * (1) Code cleanup
 * (2) Fix wine package download function
-* (3) Move global settings to `swh_profile`, you should modify this file. Run `example_launcher c` to generate it.
+* (3) Move global settings to `swh_profile`, you should modify this file. Run `example_app_launcher c` to generate it.
 * (4) Experimental functions removed
 * (5) Some commands changed, see `example_app_launcher --help`
 
