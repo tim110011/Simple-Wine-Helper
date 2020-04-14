@@ -9,13 +9,18 @@
 * Manage multiple wineprefix directories
 * Work with distro package manager if it will install winehq to /opt
 * Use with winehq repository binary package or your own build
-* Support [DXVK](https://github.com/doitsujin/dxvk) binary release package 0.5x-1.0
+* Support [DXVK](https://github.com/doitsujin/dxvk) binary release package 0.5x-1.6
 * Support Kron4ek's [FAudio MinGW (dlls) builds for Wine](https://github.com/Kron4ek/FAudio-Builds) binary release package
 * Added "Clean the Open With List" function
 * Work with [winetricks](https://wiki.winehq.org/Winetricks)
 
  **Thanks**
  * koalaman's [ShellCheck](https://github.com/koalaman/shellcheck) , this tool helps me check bash script for error.
+
+
+ **2.10.0 Update Notes**
+* (1) Improved dxvk 1.6 support
+* (2) Improved wine package download function
 
  **2.9.0 Update Notes**
 * (1) Code cleanup
