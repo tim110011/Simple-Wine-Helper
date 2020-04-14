@@ -12,7 +12,7 @@ set -e
 #		Command-line interface wrapper for wine
 #
 
-#	Copyright (C) 2017-2019 佟大维 <tim110011!163.com>
+#	Copyright (C) 2017-2020 佟大维 <tim110011!163.com>
 #
 #	License:
 #		This program is free software; you can redistribute it and/or
@@ -32,7 +32,7 @@ set -e
 
 (( BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2 || BASH_VERSINFO[0] > 4 )) || { printf "This script need bash version 4.2 or higher.\n" >&2; exit 1; }
 
-SWH_VERSION=2.9.0
+SWH_VERSION=2.10.0
 
 swh_error()
 {
@@ -45,7 +45,6 @@ swh_pause()
 	typeset ch
 	#shellcheck disable=2034
 	read -r -p 'Press any key to continue...' ch
-	unset ch
 }
 
 swh_config()
@@ -70,8 +69,6 @@ swh_config()
 	table="${table:-$default_table}"
 	d1="${d1:-$default_d1}"
 	d2="${d2:-$default_d2}"
-
-	unset default_cellar default_table default_d1 default_d2
 }
 
 swh_checkdependency()
@@ -85,8 +82,6 @@ swh_checkdependency()
 		shift
 	done
 	(( count == 0 )) || swh_error "${FUNCNAME[0]}: Dependency package requirement not met."
-
-	unset i
 }
 
 swh_storewine()
@@ -103,14 +98,12 @@ swh_storewine()
 	else
 		printf "%s exists, nothing to do.\n" "$store_path"
 	fi
-
-	unset store_path
 }
 
 # downloader wrapper
 # Usage: swh_download [-q] url
-#         -q : download url to stdout silently
-#     no arg : download url to disk
+#         -q : download url to stdout silently (metadata)
+#     no arg : download url to disk (data)
 swh_download()
 {
 	typeset -i r
@@ -118,20 +111,20 @@ swh_download()
 		wget)
 			if [[ "$1" == '-q' ]]; then
 				shift
-				wget -q -t 1 -T 30 -O - "$1"
+				wget -q -t 10 --connect-timeout=40 -O - "$1"
 				r=$?
 			else
-				wget -t 1 -T 30 "$1"
+				wget -c -t 20 --connect-timeout=40 "$1"
 				r=$?
 			fi
 			;;
 		curl)
 			if [[ "$1" == '-q' ]]; then
 				shift
-				curl -s -f -m 30 "$1"
+				curl -s -f --retry 10 --connect-timeout 40 "$1"
 				r=$?
 			else
-				curl -f -m 30 -O "$1"
+				curl -C - -f --retry 20 --connect-timeout 40 -O "$1"
 				r=$?
 			fi
 			;;
@@ -141,10 +134,7 @@ swh_download()
 
 swh_dlwine()
 {
-	if { grep fedora > /dev/null 2>&1 < /proc/version; }; then
-		printf "Note: Download wine binary build from winehq repository for newest release of fedora.\n"
-		swh_pause
-	else
+	if ! { grep fedora > /dev/null 2>&1 < /proc/version; }; then
 		printf "Note: Download wine binary build from winehq repository for newest release of fedora.\nThis method may not work on your distor.\n"
 		swh_pause
 	fi
@@ -177,8 +167,7 @@ swh_dlwine()
 	fi
 
 	# 4. goto download dir
-	[ -d "$build"-downloading ] && \rm -rf "$build"-downloading
-	mkdir "$build"-downloading || swh_error "${FUNCNAME[0]}: mkdir \$build-downloading failed"
+	mkdir -p "$build"-downloading || swh_error "${FUNCNAME[0]}: mkdir \$build-downloading failed"
 	cd "$build"-downloading || swh_error "${FUNCNAME[0]}: cd \$build-downloading failed"
 
 	# 5. Check network and download tool, get fedora distro release version
@@ -217,8 +206,8 @@ swh_dlwine()
 				typeset down32=ok
 				break
 			else
-				cd ..
-				\rm -rf "$build"-downloading
+				#cd ..
+				#\rm -rf "$build"-downloading
 				swh_error "${FUNCNAME[0]}: $downloader: download 32bit wine package failed"
 			fi
 		done
@@ -242,8 +231,8 @@ swh_dlwine()
 					typeset down64=ok
 					break
 				else
-					cd ..
-					\rm -rf "$build"-downloading
+					#cd ..
+					#\rm -rf "$build"-downloading
 					swh_error "${FUNCNAME[0]}: $downloader :download 64bit wine package failed"
 				fi
 			done
@@ -271,8 +260,6 @@ swh_dlwine()
 	typeset src="$(find ./opt -mindepth 1 -maxdepth 1 -type d)" || swh_error "${FUNCNAME[0]}: can not find extracted wine dir"
 	\mv "$src" ../"$build" || swh_error "${FUNCNAME[0]}: move wine dir failed"
 	cd .. && \rm -rf "$build"-downloading
-
-	unset pak_arch pattern pat32 pat64 downloader rel i buf32 j rpm32 down32 buf64 k rpm64 down64
 }
 
 swh_init()
@@ -301,13 +288,47 @@ swh_checkprefix()
 #	argument: --without-dxgi 		# use with dxvk 	https://github.com/doitsujin/dxvk
 # install dir should contain these dir(s): "x86" "x64"
 
+# is wine 5.3 or newer?
+f_is_wine_53()
+{
+	swh_init
+
+	typeset wv="$( wine --version | cut -d - -f 2 | cut -d ' ' -f 1 )"
+	typeset major="$( echo "$wv" | cut -d . -f 1 )"
+	typeset minor="$( echo "$wv" | cut -d . -f 2 )"
+	if (( major > 5 || major == 5 && minor >= 3 )); then
+		return 0
+	else
+		return 1
+	fi
+}
+
+# is dxvk 1.6 or newer?
+f_is_dxvk_16()
+{
+	# pattern
+	# dxvk_install="$HOME/0_wine/dxvk/dxvk-1.5.5"	
+
+	typeset dv="$( echo "$dxvk_install" | sed 's/.*\///g' | cut -d - -f 2 )"
+	typeset major="$( echo "$dv" | cut -d . -f 1 )"
+	typeset minor="$( echo "$dv" | cut -d . -f 2 )"
+	if (( major > 1 || major == 1 && minor >= 6 )); then
+		return 0
+	else
+		return 1
+	fi
+}
+
 swh_3rdpak()
 {
+	swh_checkprefix
+	
 	[[ "$runner" =~ wine|wine64 ]] || swh_error "${FUNCNAME[0]}: wrong value in \$runner , must be wine or wine64"
 
 	typeset pakname="$1"
 	typeset cmd="$2"
-	typeset arg="$3"
+	shift
+	shift
 
 	case $WINEARCH in
 		win32)
@@ -337,42 +358,95 @@ swh_3rdpak()
 	case $cmd in
 		i | install)
 			! [ -f "$WINEPREFIX"/drive_c/swh-"$pakname".install ] || swh_error "${FUNCNAME[0]}: $pakname already installed."
-			( [[ "$pakname" == 'dxvk' ]] && [ -f "$WINEPREFIX"/drive_c/swh-d9vk.install ] ) && swh_error "${FUNCNAME[0]}: dxvk conflict with d9vk"
-			( [[ "$pakname" == 'd9vk' ]] && [ -f "$WINEPREFIX"/drive_c/swh-dxvk.install ] ) && swh_error "${FUNCNAME[0]}: d9vk conflict with dxvk"
+			
+			# is source file dir empty?
+			if [ "$WINEARCH" == win32 ]; then typeset bit=32; fi
+			if [ "$WINEARCH" == win64 ]; then typeset bit=64; fi
+			if [ -z "$( ls -A "$idir"/x"$bit" )" ]; then swh_error "WINEARCH is $WINEARCH but $idir/$bit dir is empty!"; fi
+			
+			{ [[ "$pakname" == 'dxvk' ]] && [ -f "$WINEPREFIX"/drive_c/swh-d9vk.install ]; } && swh_error "${FUNCNAME[0]}: dxvk conflict with d9vk"
+			{ [[ "$pakname" == 'd9vk' ]] && [ -f "$WINEPREFIX"/drive_c/swh-dxvk.install ]; } && swh_error "${FUNCNAME[0]}: d9vk conflict with dxvk"
+			
+			# method:
+				#11: full install  ( old default method )
+				#10: with dxgi.dll , no d3d10.dll d3d10_1.dll  ( dxvk 1.6+ and wine 5.3+ default method )
+				#01: no dxgi.dll, with d3d10.dll d3d10_1.dll
+				#00: no dxgi.dll , no d3d10.dll d3d10_1.dll
 
-			# generate file list, dir x32 and x64 must contain same name dll files
+			typeset -i method=11
+			
+			if [ "$pakname" == 'dxvk' ]; then
+				if ( f_is_wine_53 && f_is_dxvk_16 ); then
+					typeset -i method=10
+					while (($# > 0)); do
+						case "$1" in
+							"--without-dxgi")
+								#with_dxgi=false
+								method=$($method-10)
+								;;
+							"--with-d3d10")
+								#with_d3d10=true
+								method=$($method+1)
+								;;
+						esac
+						shift
+					done
+				else
+					typeset -i method=11
+					if [ "$1" == "--without-dxgi" ]; then
+						#with_dxgi=false
+						method=$($method-10)
+					fi
+				fi
+			fi
+			
+			# generate file list
 			typeset -a ar
-			readarray -t ar<<<"$( find "$idir"/x32 -mindepth 1 -maxdepth 1 -type f -name '*.*' -printf %f\\n | LC_ALL=C sort)"
-			[ -z "${ar[0]}" ] && swh_error "${FUNCNAME[0]}: empty file list, x32 dir is missing or empty"
+			#readarray -t ar<<<"$( find "$idir"/x"$bit" -mindepth 1 -maxdepth 1 -type f -name '*.*' -printf %f\\n | LC_ALL=C sort)"
+			while read -r -d ''; do
+				ar+=("$REPLY")
+			done < <(\
+				case $method in
+					11)
+						find "$idir"/x"$bit" -mindepth 1 -maxdepth 1 -type f -name '*.*' -printf %f\\0
+						;;
+					10)
+						find "$idir"/x"$bit" -mindepth 1 -maxdepth 1 -type f -name '*.*' \! -iname 'd3d10.dll' \! -iname 'd3d10_1.dll' -printf %f\\0
+						;;
+					01)
+						find "$idir"/x"$bit" -mindepth 1 -maxdepth 1 -type f -name '*.*' \! -iname 'dxgi.dll' -printf %f\\0
+						;;
+					00)
+						find "$idir"/x"$bit" -mindepth 1 -maxdepth 1 -type f -name '*.*' \! -iname 'dxgi.dll' \! -iname 'd3d10.dll' \! -iname 'd3d10_1.dll' -printf %f\\0
+						;;
+				esac
+			)
+
 			#debug
 			printf "%s\n" "${ar[@]}"
 
-			typeset -i i
-			for (( i=0; i<${#ar[@]}; i++ )); do
-				case "$WINEARCH" in
-					win32)
-						if ! ( [[ "$pakname" == 'dxvk' || "$pakname" == 'd9vk' ]] && [[ "$arg" == '--without-dxgi' ]] && [[ "${ar[i]}" =~ [dD][xX][gG][iI].[dD][lL][lL] ]] ); then
-							[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
-							ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
-							wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 > /dev/null
-						else
-							:
-						fi
-						;;
-					win64)
-						if ! ( [[ "$pakname" == 'dxvk' || "$pakname" == 'd9vk' ]] && [[ "$arg" == '--without-dxgi' ]] && [[ "${ar[i]}" =~ [dD][xX][gG][iI].[dD][lL][lL] ]] ); then
-							[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
-							ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
-							[ -f "$dll64_path"/"${ar[i]}" ] && \mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
-							ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"
-							# use wine64 reg ?
-							wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 > /dev/null
-						else
-							:
-						fi
-						;;
-				esac
-			done
+			case "$WINEARCH" in
+				win32)
+					typeset -i i
+					for (( i=0; i<${#ar[@]}; i++ )); do
+						[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
+						ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
+						wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 > /dev/null
+					done
+					;;
+				win64)
+					typeset -i i
+					for (( i=0; i<${#ar[@]}; i++ )); do
+						[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
+						ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
+						[ -f "$dll64_path"/"${ar[i]}" ] && \mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
+						ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"
+						# use wine64 reg ?
+						wine reg add 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "*${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /d native /f 1 > /dev/null
+					done
+					;;
+			esac
+
 			printf "%s\n" "${ar[@]}" > "$WINEPREFIX"/drive_c/swh-"$pakname".install
 			;;
 		u | uninstall)
@@ -391,7 +465,7 @@ swh_3rdpak()
 						wine reg delete 'HKEY_CURRENT_USER\Software\Wine\DllOverrides' /v "$( echo "${aru[j]}" | sed -En 's/\.[dD][lL][lL]$//gp' )" /f 1 > /dev/null
 						;;
 					win64)
-						if [ -f "$dll32_path"/"${aru[j]}"."$pakname" ]; then
+						if [ -f "$dll64_path"/"${aru[j]}"."$pakname" ]; then
 							\mv -f "$dll32_path"/"${aru[j]}"."$pakname" "$dll32_path"/"${aru[j]}"
 							\mv -f "$dll64_path"/"${aru[j]}"."$pakname" "$dll64_path"/"${aru[j]}"
 						else
@@ -402,13 +476,12 @@ swh_3rdpak()
 						;;
 				esac
 			done
+			\rm -f "$WINEPREFIX"/drive_c/swh-"$pakname".install
 			;;
 		*)
 			swh_error "${FUNCNAME[0]}: unknown command, supported command: install, uninstall"
 			;;
 	esac
-
-	unset pakname cmd arg dll32_path dll64_path idir ar i aru j
 }
 
 swh_objdump()
@@ -428,7 +501,6 @@ swh_objdump()
 			file "$lfn"
 			printf "\n"
 			objdump -p "$lfn" | grep "DLL Name" | sort | sed -En 's/[[:blank:]]*DLL Name: //gp'
-			unset ldrv ldf lfn
 			;;
 		*)
 			swh_error "No exe to scan. usage example: 'launcher od 1'"
@@ -457,8 +529,6 @@ rm -f ~/.local/share/mime/application/x-wine-extension*\n\
 		\rm -f ~/.local/share/icons/hicolor/*/*/application-x-wine-extension*
 		\rm -f ~/.local/share/mime/application/x-wine-extension*
 	fi
-
-	unset ch
 }
 
 # Chinese fonts replacement: use google-noto-cjk ttc fonts
@@ -561,8 +631,9 @@ ww [swh command]            swh command, these commands need winetricks as depen
   cnfonts                       (EXPERIMENTIAL FUNCTION) don't use
   (ALL OTHER EXPERIMENTIAL FUNCTIONS REMOVED, PLEASE USE WINETRICKS)
 
-3rd dxvk i 					Install dxvk 0.5x 0.6x 0.7x 0.8x 0.9x 1.0 ( create symbolic link )
+3rd dxvk i 					Install dxvk 0.5x-1.6 ( create symbolic link )
 3rd dxvk i --without-dxgi 	Same as above, without-dxgi see https://github.com/doitsujin/dxvk
+3rd dxvk i --with-d3d10     Same as above, with-d3d10 see https://github.com/doitsujin/dxvk
 3rd dxvk u 					Uninstall dxvk
 3rd faudio i 				Install faudio
 3rd faudio u 				Uninstall faudio
@@ -703,7 +774,8 @@ if (( $# > 0 )); then
 		;;
 	i)
 		swh_init
-		declare -a ar
+		swh_checkprefix
+		typeset -a ar
 		if { printf "%s\n" "$prefix" | grep "-" ; }; then
 			temp_var=$( printf "%s\n" "$prefix" | sed -En 's/-.*$//gp' )
 		else
@@ -727,7 +799,6 @@ if (( $# > 0 )); then
 		else
 			swh_error "Can not inherit: No prefix with same name found."
 		fi
-		unset temp_var
 		;;
 	dr)
 		shift
