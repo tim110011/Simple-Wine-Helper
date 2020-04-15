@@ -32,7 +32,7 @@ set -e
 
 (( BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2 || BASH_VERSINFO[0] > 4 )) || { printf "This script need bash version 4.2 or higher.\n" >&2; exit 1; }
 
-SWH_VERSION=2.10.0
+SWH_VERSION=2.10.1
 
 swh_error()
 {
@@ -319,6 +319,27 @@ f_is_dxvk_16()
 	fi
 }
 
+# Get both linux and windows style dirname; check if they are valid; if linux style, convert to windows style 
+f_get_app_dir()
+{
+	# 1. windows style path
+	if ( echo "${exe[i]}" | grep -E '^[A-Za-z]:\\.*$' - ); then
+		wd="${exe[i]%\\*}"
+		ld="$table/$WINEARCH/$build/$prefix/dosdevices/$( echo "${wd,[[:upper:]]}" | sed 's/\\/\//g' )"
+		[ -d "$ld" ] || swh_error "${FUNCNAME[0]}: $ld : dir not found. Wrong windows style path? Check \${exe[i]} in launcher."
+	# 2. linux style path, convert to windows style
+	#    only understand dir in dosdevices: /home/me/swh/table/win64/5.6-staging/mb2/dosdevices/e:/appdir/game.exe
+	elif ( echo "${exe[i]}" | grep -E '^/.*$' - ); then
+		ld="$( dirname "${exe[i]}" )"
+		[ -d "$ld" ] || swh_error "${FUNCNAME[0]}: $ld : dir not found. Wrong linux style path? Check \${exe[i]} in launcher."
+		wd="$( echo "$ld" | sed -E 's/(.*\/)([a-z]:)(\/.*)/\2\3/g; s/\//\\/g' )"
+		exe[i]="$wd\\${exe[i]##*/}"
+	# 3. wrong path
+	else
+		swh_error "${FUNCNAME[0]}: \${exe[i]} do not look like valid windows or linux path, check launcher."
+	fi
+}
+
 swh_3rdpak()
 {
 	swh_checkprefix
@@ -382,11 +403,11 @@ swh_3rdpak()
 						case "$1" in
 							"--without-dxgi")
 								#with_dxgi=false
-								method=$($method-10)
+								method=$(( method-10 ))
 								;;
 							"--with-d3d10")
 								#with_d3d10=true
-								method=$($method+1)
+								method=$(( method+1 ))
 								;;
 						esac
 						shift
@@ -395,7 +416,7 @@ swh_3rdpak()
 					typeset -i method=11
 					if [ "$1" == "--without-dxgi" ]; then
 						#with_dxgi=false
-						method=$($method-10)
+						method=$(( method-10 ))
 					fi
 				fi
 			fi
@@ -612,9 +633,10 @@ i                           Inherit old profile files, useful when upgrading fro
 
 dr [drive]                  see swh_profile
   d                             create shared drive D: files in this dir is visable by all wine prefixes
-  e                             create pirvate drive E: files in this dir is visable by this wine prefix only
+  e                             create drive E: files in this dir is visable by prefixes which have same \$prefix value
+                                ( different wine version, different launcher, same \$prefix value, shared drive E )
   f                             create shared drive F: on another disk, files in this dir is visable by all wine prefixes
-  g                             create pirvate drive G: on another disk, files in this dir is visable by this wine prefix only
+  g                             create drive G: on another disk, files in this dir is visable by prefixes which have same \$prefix value
 
 r [registry file]           Run regedit [regfile]
 
@@ -631,16 +653,16 @@ ww [swh command]            swh command, these commands need winetricks as depen
   cnfonts                       (EXPERIMENTIAL FUNCTION) don't use
   (ALL OTHER EXPERIMENTIAL FUNCTIONS REMOVED, PLEASE USE WINETRICKS)
 
-3rd dxvk i 					Install dxvk 0.5x-1.6 ( create symbolic link )
-3rd dxvk i --without-dxgi 	Same as above, without-dxgi see https://github.com/doitsujin/dxvk
+3rd dxvk i                  Install dxvk 0.5x-1.6 ( create symbolic link )
+3rd dxvk i --without-dxgi   Same as above, without-dxgi see https://github.com/doitsujin/dxvk
 3rd dxvk i --with-d3d10     Same as above, with-d3d10 see https://github.com/doitsujin/dxvk
-3rd dxvk u 					Uninstall dxvk
-3rd faudio i 				Install faudio
-3rd faudio u 				Uninstall faudio
+3rd dxvk u                  Uninstall dxvk
+3rd faudio i                Install faudio
+3rd faudio u                Uninstall faudio
 
 cleanopenwith | cow         Clean the Open With List
 
-NO argument                Show a small menu
+NO argument                 Show application menu
 
 
 Examples:
@@ -648,7 +670,6 @@ Examples:
   APP_LAUNCHER l cmd                Wine cmd
   APP_LAUNCHER l control            Wine Control Panel
   APP_LAUNCHER w d3dcompiler_47     This is a winetricks command, it installs d3dcompiler_47 override
-  APP_LAUNCHER 3rd dxvk i 		    This is a swh command, it installs d3dcompiler_42 override
 
 Quick Guide:
 1. Install wine into a SEPERATE directory:
@@ -726,20 +747,25 @@ if (( $# > 0 )); then
 		i=$1
 		[ -n "${exe[i]}" ] || swh_error "no such exe"
 		# cd into exe dir, regardless use or not use winestart /d
-		wdir=${exe[i]%\\*}
-		ldir="$(winepath -u "$wdir")"
-		cd "$ldir"
+		wd=''
+		ld=''
+		f_get_app_dir && cd "$ld"
+
+		#echo wd="$wd"
+		#echo ld="$ld"
+		#pwd
+
 		if [ X"$use_winestart" == X'true' ];then
 			if [ -z "$invoker" ]; then
 				#shellcheck disable=2086
-				"$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
+				"$runner" start /d "$wd" "${exe[i]}" ${args[i]}
 			else
 				if [ -z "$invoker_args_str" ]; then
 					#shellcheck disable=2086
-					"$invoker" "$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
+					"$invoker" "$runner" start /d "$wd" "${exe[i]}" ${args[i]}
 				else
 					#shellcheck disable=2086
-					"$invoker" $invoker_args_str "$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
+					"$invoker" $invoker_args_str "$runner" start /d "$wd" "${exe[i]}" ${args[i]}
 				fi
 			fi
 		else
@@ -933,20 +959,21 @@ else
 		if [ X"$item" == X"help" ]; then swh_help; break; fi
 		if [ X"$item" == X"quit" ]; then break; fi
 		[ -n "${exe[i]}" ] || { break; swh_error "no such exe"; }
-		wdir=${exe[i]%\\*}
-		ldir="$(winepath -u "$wdir")"
-		cd "$ldir"
+		# cd into exe dir, regardless use or not use winestart /d
+		wd=''
+		ld=''
+		f_get_app_dir && cd "$ld"
 		if [ X"$use_winestart" == X'true' ];then
 			if [ -z "$invoker" ]; then
 				#shellcheck disable=2086
-				"$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
+				"$runner" start /d "$wd" "${exe[i]}" ${args[i]}
 			else
 				if [ -z "$invoker_args_str" ]; then
 					#shellcheck disable=2086
-					"$invoker" "$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
+					"$invoker" "$runner" start /d "$wd" "${exe[i]}" ${args[i]}
 				else
 					#shellcheck disable=2086
-					"$invoker" $invoker_args_str "$runner" start /d "$wdir" "${exe[i]}" ${args[i]}
+					"$invoker" $invoker_args_str "$runner" start /d "$wd" "${exe[i]}" ${args[i]}
 				fi
 			fi
 		else
