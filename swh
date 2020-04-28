@@ -32,7 +32,7 @@ set -e
 
 (( BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2 || BASH_VERSINFO[0] > 4 )) || { printf "This script need bash version 4.2 or higher.\n" >&2; exit 1; }
 
-SWH_VERSION=2.10.1
+SWH_VERSION=2.11.0
 
 swh_error()
 {
@@ -893,19 +893,39 @@ if (( $# > 0 )); then
 		fi
 		;;
 	wf | --windowsfonts)
-		swh_checkdependency winetricks
+		
 		swh_init
 		swh_checkprefix
-		if [ -d "$windowsfonts"  ]; then
-			cd "$WINEPREFIX"/dosdevices/c:/windows
-			\rm -fr ./Fonts
-			ln -s "$windowsfonts" ./Fonts
-		else
-			shift
-			swh_error "$windowsfonts dir not exist."
-		fi
+		if (( $# != 2 )); then swh_error "wrong argument"; fi
+		shift
+		typeset cmd="$1"
+		case "$cmd" in
+			i | install)
+				if ! [ -d "$windowsfonts"  ]; then swh_error "$windowsfonts dir not exist."; fi
+				cd "$WINEPREFIX"/dosdevices/c:/windows
+				if [ -d ./Fonts.wine ]; then
+					printf "Windows Fonts already used, nothing to do.\n"
+				else
+					\mv ./Fonts ./Fonts.wine
+					ln -s "$windowsfonts" ./Fonts
+				fi
+				;;
+			u | uninstall)
+				cd "$WINEPREFIX"/dosdevices/c:/windows
+				if [ -d ./Fonts.wine ]; then
+					\rm -rf ./Fonts
+					\mv ./Fonts.wine ./Fonts 
+				else
+					printf "You are not using windows fonts, nothing to do.\n"
+				fi
+				;;
+			*)
+				swh_error "wrong argument, supported argument: i , u"
+				;;
+		esac
 		;;
-	ww | --swhwinetricks)
+	# test only 
+	ww )
 		swh_init
 		swh_checkprefix
 		if (( $# == 2 )); then
