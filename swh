@@ -635,7 +635,7 @@ d                           Download wine from winehq fedora repository, please 
 
 i                           Inherit old profile files, useful when upgrading from old frefixes: copy these dirs from one old prefix to current prefix: 'C:\users\USERNAME\AppData' 'C:\users\USERNAME\Application Data' 'C:\users\USERNAME\Local Settings'
 
-dr DISK DOSDRIVELETTER         varible DISK is defined in swh_profile
+dr DISK DOSDRIVELETTER         variable DISK is defined in swh_profile
   1 d                             create shared drive D: on disk 1. Files in this dir is visable by all wine prefixes, if it has executed `dr 1 d`
   1 e                             create drive E: on disk 1. Files in this dir is visable by prefixes which have same \$prefix value, if it has executed `dr 1 e`
 
