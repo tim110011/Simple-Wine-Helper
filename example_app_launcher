@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 
-SWH_LAUNCHER_VERSION=2.10.0
+SWH_LAUNCHER_VERSION=2.12
 { command -v swh >/dev/null; } || { printf "ERROR: swh is not installed or is not executable.\nIt is suggested place swh in %s/bin and add\n  PATH=\$PATH:%s/bin\n  PATH\nto your .bashrc file.\n" "$PWD" "$HOME"; exit 1; }
 
 ## Example Application Launcher: notepad , Internet Explorer
 # comment
 
 prefix='notepad-example'								# give a unique name to your wineprefix
-build='5.6-staging'										# this is the dir name in cellar, provided by winehq or your own build.
+build='5.16-staging'										# this is the dir name in cellar, provided by winehq or your own build.
 install='/opt/wine-staging'								# { '/opt/wine-stable' ; '/opt/wine-devel' ; '/opt/wine-staging' } winehq must be installed in /opt to be supported by `swh s` command: copy winehq from /opt to $cellar. For your own build, copy it into $cellar
 build_arch=win64										# { win32 ; win64 } wine pagkage arch, 64bit linux should set this value to win64, you can create 32bit prefix by set WINEARCH=win32
 export WINEARCH=win64									# { win32 ; win64 } arch of your wineprefix. must export this variable
@@ -22,15 +22,16 @@ runner=wine												# { wine ; wine64 ; winedbg } default: wine
 use_winestart=true 										# { true ; false } default: true , for regular use.
 #runas_str='runas /trustlevel:0x20000' 					# This feature is not supported yet. full command line in this string. experimental wine-staging feature. https://bugs.winehq.org/show_bug.cgi?id=40613
 
-#LC_ALL=zh_CN.utf8											# for non-unicode program, see 'locale -a' command
+#export LC_ALL=zh_CN.utf8											# for non-unicode program, see 'locale -a' command
 
 ## Staging Setting
-#export WINEESYNC=1 										# { 0 ; 1 } officially introduced in wine-4.6-staging.
+export WINEESYNC=1 										# { 0 ; 1 } officially introduced in wine-4.6-staging.
 
 ## DXVK/D9VK setting
-dxvk_install="$HOME/0_wine/dxvk/dxvk-1.6"						# DXVK release build dir, support version 0.5x-1.6 . swh 2.7.2 use `ln -s` method install 3rd party package. (may need native d3dcompiler_47.dll ? https://github.com/doitsujin/dxvk/issues/875#issuecomment-456768012)
+dxvk_install="$HOME/0_wine/dxvk/dxvk-1.7.1"						# DXVK release build dir, support version 0.5x-1.6 . swh 2.7.2 use `ln -s` method install 3rd party package. (may need native d3dcompiler_47.dll ? https://github.com/doitsujin/dxvk/issues/875#issuecomment-456768012)
 #d9vk_install="$HOME/0_wine/d9vk/d9vk-0.30"						# D9VK release build dir , "Please do not use wine's d3d9x or d3dcompiler with d9vk."
-#DXVK_HUD=1
+#export DXVK_HUD=devinfo,fps,memory,gpuload,version,api
+export DXVK_LOG_LEVEL=none
 #DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/$prefix/dxvk.conf" 				# application configuration file, write these files yourself, see dxvk wiki
 #DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/amd/dxvk.conf" 					# tell dxvk you are using amd gpu
 #DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/nv/dxvk.conf" 					# tell dxvk you are using nvidia gpu
