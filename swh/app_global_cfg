@@ -1,0 +1,30 @@
+#!/bin/bash
+
+#This file contain generic settings
+
+runner=${runner:-wine}
+export WINEDEBUG=fixme-all,+tid 						# set WINEDEBUG channels here will override swh default settings
+#export WINEDEBUG=+tid
+export WINEDLLOVERRIDES="winemenubuilder.exe=" 		# winemenubuilder is useful to normal wine usage, but not to swh
+
+##  wine-staging settings 	https://wiki.winehq.org/Wine-Staging_Environment_Variables
+export STAGING_SHARED_MEMORY=1
+export WINEESYNC=1 										# { 0 ; 1 } officially introduced in wine-4.6-staging.
+
+## Select driver 	https://github.com/doitsujin/dxvk/wiki/Common-issues
+#export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+
+##  DXVK/D9VK settings 	https://github.com/doitsujin/dxvk
+dxvk_install="$HOME/0_wine/dxvk/dxvk-1.9"						# DXVK release build dir, support version 0.5x-1.9 . swh 2.7.2+ use `ln -s` method install 3rd party package. (may need native d3dcompiler_47.dll ? https://github.com/doitsujin/dxvk/issues/875#issuecomment-456768012)
+#d9vk_install="$HOME/0_wine/d9vk/d9vk-0.30"						# D9VK release build dir , "Please do not use wine's d3d9x or d3dcompiler with d9vk."
+
+#export DXVK_HUD=devinfo,fps,memory,gpuload,version,api
+#export DXVK_FRAME_RATE=60
+#export DXVK_FILTER_DEVICE_NAME="NVIDIA GeForce GTX 750 Ti"
+#export DXVK_STATE_CACHE_PATH="$HOME/0_wine/DXVK_CONFIG/cache"
+export DXVK_LOG_LEVEL=none
+#DXVK_CONFIG_FILE="$HOME/0_wine/DXVK_CONFIG/default/dxvk.conf" 				# https://github.com/doitsujin/dxvk/blob/master/dxvk.conf
+#export WINEDLLOVERRIDES="winemenubuilder.exe,nvapi.dll,nvapi64.dll=d"
+
+##  FAudio settings
+faudio_install="$HOME/0_wine/faudio/faudio-20.07"					# extract FAudio release archive dir, build it yourself or download from https://github.com/Kron4ek/FAudio-Builds/releases . same install method as dxvk
