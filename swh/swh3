@@ -1,0 +1,160 @@
+#!/bin/bash
+# shellcheck disable=2154
+set -e
+
+# This is a UTF-8 file
+# You should see an o with two dots over it here [ö]
+# You should see a micro (u with a tail) here [µ]
+# You should see a trademark symbol here [™]
+
+#	Simple Wine Helper (SWH)
+#
+#		Command-line interface wrapper for wine
+#
+
+#	Copyright (C) 2017-2021 佟大维 <tim110011!163.com>
+#
+#	License:
+#		This program is free software; you can redistribute it and/or
+#		modify it under the terms of the GNU Lesser General Public
+#		License as published by the Free Software Foundation; either
+#		version 2.1 of the License, or (at your option) any later
+#		version.
+#
+#		This program is distributed in the hope that it will be useful,
+#		but WITHOUT ANY WARRANTY; without even the implied warranty of
+#		MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#		GNU Lesser General Public License for more details.
+#
+#		You should have received a copy of the GNU Lesser General Public
+#		License along with this program.  If not, see
+#		<https://www.gnu.org/licenses/>.
+
+
+# swh_select_cellar run | storage 
+#search wine on fast or slow disk first
+swh_select_cellar()
+{
+	typeset -i i
+	case "$1" in
+		run)
+			for (( i=0; i < ${#wine_cellar[@]}; i++ )); do
+				if [ -x "${wine_cellar[i]}/$bin_arch/$build/bin/wine" ]; then
+					cellar="${wine_cellar[i]}"
+					#echo "select_cellar arg: \$1=$1  cellar=${wine_cellar[i]}"
+					break
+				fi
+			done
+			[ -v cellar ] || { printf "ERROR: %s: No executable wine in cellar！ Store or download wine first. Or check wine_cellar[0] in swh3_cfg\n" "${FUNCNAME[0]}"; exit 1; }
+			;;
+		storage)
+			for (( i=$(( ${#wine_cellar[@]} - 1 )); i >= 0; i-- )); do
+				if [[ -v wine_cellar[i] ]]; then
+					cellar="${wine_cellar[i]}"
+					#echo "select_cellar arg: \$1=$1  cellar=${wine_cellar[i]}"
+					break
+				fi
+			done
+			[ -v cellar ] || { printf "ERROR: %s: wine cellar is not defined！ check wine_cellar[0] in swh3_cfg\n" "${FUNCNAME[0]}"; exit 1; }
+			;;
+	esac
+}
+
+swh_export_env()
+{
+	export WINEVERPATH="$cellar/$bin_arch/$build"
+	export WINEPREFIX="$table/$WINEARCH/$build/$prefix"
+	export PATH="$WINEVERPATH/bin:$PATH"
+	export WINESERVER="$WINEVERPATH/bin/wineserver"
+	export WINELOADER="$WINEVERPATH/bin/wine"
+	export WINEDLLPATH="$WINEVERPATH/lib/wine/fakedlls"
+	export LD_LIBRARY_PATH="$WINEVERPATH/lib:$LD_LIBRARY_PATH"
+}
+
+swh_checkprefix()
+{
+	[ -f "$table/$WINEARCH/$build/$prefix/user.reg" ] || { printf "ERROR: %s: wineprefix dir is not created, or if your prefix is on a slow HDD, please wait some seconds and try again.\n" "${FUNCNAME[0]}"; exit 1; }
+}
+
+# Get both linux and windows style dirname; check if they are valid; if linux style, convert to windows style 
+f_get_app_dir()
+{
+	# 1. windows style path
+	if ( echo "${exe[i]}" | grep -E '^[A-Za-z]:\\.*$' - ); then
+		wd="${exe[i]%\\*}"
+		ld="$table/$WINEARCH/$build/$prefix/dosdevices/$( echo "${wd,[[:upper:]]}" | sed 's/\\/\//g' )"
+		[ -d "$ld" ] || { printf "ERROR: %s: %s : dir not found. Wrong windows style path? Check \${exe[i]} in launcher.\n" "${FUNCNAME[0]}" "$ld"; exit 1; }
+	# 2. linux style path, convert to windows style
+	#    only understand dir in dosdevices: /home/me/swh/table/win64/5.6-staging/mb2/dosdevices/e:/appdir/game.exe
+	elif ( echo "${exe[i]}" | grep -E '^/.*$' - ); then
+		ld="$( dirname "${exe[i]}" )"
+		[ -d "$ld" ] || { printf "ERROR: %s: %s : dir not found. Wrong linux style path? Check \${exe[i]} in launcher.\n" "${FUNCNAME[0]}" "$ld"; exit 1; }
+		wd="$( echo "$ld" | sed -E 's/(.*\/)([a-z]:)(\/.*)/\2\3/g; s/\//\\/g' )"
+		exe[i]="$wd\\${exe[i]##*/}"
+	# 3. Path that cannot be converted 
+	else
+		{ printf "ERROR: %s: convert path failed, check launcher.\n\${exe[i]}=%s\n" "${FUNCNAME[0]}" "${exe[i]}"; exit 1; }
+	fi
+}
+
+
+## main()
+#{
+
+(( $( id -u ) != 0 )) || { printf "ERROR: running swh as root.\n"; exit 1; }
+(( BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2 || BASH_VERSINFO[0] > 4 )) || { printf "ERROR: This script need bash version 4.2 or higher.\n" >&2; exit 1; }
+
+source ./swh/swh3_cfg
+
+#run launcher without argument, show menu
+if (( $# == 0 )); then
+	swh_select_cellar run
+	swh_export_env
+	if (( fast_mode == 0 )); then { swh_checkprefix; }; fi;
+	select item in "${exe[@]}" help quit; do
+		i=$REPLY
+		if [ -n "${exe[i]}" ]; then
+			if (( fast_mode == 0 )); then { wd=''; ld=''; f_get_app_dir; cd "$ld"; }; fi;
+			# default: do not use runas 
+			# default: do not use start    https://wiki.winehq.org/Start
+			# wine runas /trustlevel:0x20000 "cmd /c start /d D:\\ dzclient-1.7.85.exe"
+			if ! [ -v "$start_str" ]; then
+				#shellcheck disable=2206
+				cmdl=( "$invoker" $invoker_args_str "$runner" "$run_as_str" "\"\${exe[i]}\"" ${args[i]} )
+			else
+				#shellcheck disable=2206
+				cmdl=( "$invoker" $invoker_args_str "$runner" "$run_as_str" "$start_str \"\${exe[i]}\" ${args[i]}" )
+			fi
+			eval "${cmdl[*]}"
+			#"${cmdl[*]}"
+		elif [ X"$item" == X"help" ]; then
+			swh_help
+			break
+		elif [ X"$item" == X"quit" ]; then
+			break
+		else
+			{ break; printf "ERROR: %s not found.\n" "${exe[i]}"; exit 1; }
+		fi
+		break;
+	done
+elif [[ $1 =~ ^[0-9]+$ ]]; then
+	i=$1
+	swh_select_cellar run
+	swh_export_env
+
+	if (( fast_mode == 0 )); then { swh_checkprefix; wd=''; ld=''; f_get_app_dir; cd "$ld"; }; fi;
+
+	if ! [ -v "$start_str" ]; then
+		#shellcheck disable=2206
+		cmdl=( "$invoker" $invoker_args_str "$runner" "$run_as_str" "\"\${exe[i]}\"" ${args[i]} )
+	else
+		#shellcheck disable=2206
+		cmdl=( "$invoker" $invoker_args_str "$runner" "$run_as_str" "$start_str \"\${exe[i]}\" ${args[i]}" )
+	fi
+	eval "${cmdl[*]}"
+	#"${cmdl[*]}"
+else
+	source ./swh/swh3lib "$@"
+fi
+
+#}
