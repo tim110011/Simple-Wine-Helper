@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#This file contain simple-wine-helper settings, modify it before use
+
+wine_cellar[0]="$HOME/swh/cellar"				# Store wine here. Suppose this directory is on a fast SSD. When running a program, swh first searches for wine in this directory.
+#wine_cellar[1]="/mnt/hd/me/swh/cellar"			# Optional. Suppose this directory is on a slow HDD. Downloaded wine binary packages are stored in this directory first.
+table="$HOME/swh/table"							# wineprefix dirs cluster
+disk[1]="$HOME/swh/disk"							# dir hold wine extra drives ( D: E: ) , not in wineprefix, suggest on a fast SSD, for programs/games need fast disk io perofrmance.
+#disk[2]="/mnt/hd/me/swh/disk"						# optional, dir hold wine extra drives ( F: G: ) , not in wineprefix, maybe on a slow HDD, for small programs/games.
+windowsfonts="$HOME/swh/Fonts"					# optional, windows `Fonts` dir
+typeset -i fast_mode=0 							# {0,1}  0: load more check code, support limited unix style path;  1: load lesser check code, script may run faster
