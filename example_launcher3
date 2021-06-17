@@ -1,0 +1,37 @@
+#!/bin/bash
+set -e
+
+##  Example Application Launcher: notepad , Internet Explorer
+# comment
+
+prefix='notepad-example'									# give a unique name to your wineprefix
+build='6.10-staging'										# this is the dir name in cellar, provided by winehq or your own build.
+bin_arch=win64											# { win32 ; win64 }  ( default: win64 )  arch of wine binary packages.
+export WINEARCH=win64									# { win32 ; win64 }  ( default: win64 )  wineprefix arch. must export this variable to environment.
+
+source ./swh/app_global_cfg 								# wine, wine-staging, dxvk, faudio settings
+#source ./swh/app_advanced_cfg 							# config primusrun, debugger
+
+##  custom application settings
+#export LC_ALL=zh_CN.utf8								# for non-unicode program, see 'locale -a' command
+#XMODIFIERS='' 											# Unity Game Keyboard issue walkaround  https://www.gamingonlinux.com/articles/if-you-have-trouble-with-keyboard-input-in-some-unity-games-there-is-a-workaround.12411
+
+
+# 1. valid subscript range [1-99] 
+# 2. assign array members contiguously
+# 3. if command have arguments, write all arguments in string args[i]
+
+exe[1]='C:\windows\notepad.exe'
+#args[1]=''
+
+exe[2]='C:\Program Files (x86)\Internet Explorer\iexplore.exe'
+#args[2]=''
+
+#exe[3]=''
+#args[3]=''
+
+#exe[4]=''
+#args[4]=''`
+
+
+source ./swh/swh3 "$@"
