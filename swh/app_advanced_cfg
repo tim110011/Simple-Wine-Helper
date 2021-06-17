@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#invoker='strace'																	# { primusrun ; perf recored ; strace } comment this line out if not debugging
+#invoker_args_str='-e trace=open,openat' 										# all arguments in this string
+
+runner=wine																		# { wine ; wine64 ; winedbg } default: wine
+
+#run_as_str="runas /trustlevel:0x20000" 										# disabled by default. Enable this if a program must run as a normal user. https://bugs.winehq.org/show_bug.cgi?id=40613
+
+																	#  start command string, exclude exe path or file name.      https://wiki.winehq.org/Start    https://bugs.winehq.org/show_bug.cgi?id=40613#c22
+																	#    wine runas /trustlevel:0x20000 "cmd /c start /d D:\\ example.exe"
+#start_str='cmd /c start /d D:\\' 												# disabled by default, avoid using start. 
