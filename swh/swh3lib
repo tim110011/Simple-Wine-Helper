@@ -38,7 +38,7 @@ islib()
 }
 
 islib || exit 1
-SWH_VERSION=3.0.0
+SWH_VERSION=3.0.1
 
 swh_quit()
 {
@@ -443,7 +443,7 @@ _EOF_
 					for (( i=0; i<${#ar[@]}; i++ )); do
 						[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
 						#\cp -pv "$idir"/x32/"${ar[i]}" "$dll32_path"
-						ln -sT "$idir"/x32/"${ar[i]}" "$dll32_path"
+						ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
 						dll="$( echo "${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )"
 						echo "\"*$dll\"=\"native\"" >> "$swh_tempdir"/override-dll.reg
 					done
@@ -455,10 +455,10 @@ _EOF_
 						for (( i=0; i<${#ar[@]}; i++ )); do
 							[ -f "$dll32_path"/"${ar[i]}" ] && \mv -f "$dll32_path"/"${ar[i]}" "$dll32_path"/"${ar[i]}"."$pakname"
 							#\cp -pv "$idir"/x32/"${ar[i]}" "$dll32_path"
-							ln -sT "$idir"/x32/"${ar[i]}" "$dll32_path"
+							ln -s "$idir"/x32/"${ar[i]}" "$dll32_path"
 							[ -f "$dll64_path"/"${ar[i]}" ] && \mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
 							#\cp -pv "$idir"/x64/"${ar[i]}" "$dll64_path"
-							ln -sT "$idir"/x64/"${ar[i]}" "$dll64_path"
+							ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"
 							dll="$( echo "${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )"
 							echo "\"*$dll\"=\"native\"" >> "$swh_tempdir"/override-dll.reg
 						done
@@ -469,7 +469,7 @@ _EOF_
 						for (( i=0; i<${#ar[@]}; i++ )); do
 							[ -f "$dll64_path"/"${ar[i]}" ] && \mv -f "$dll64_path"/"${ar[i]}" "$dll64_path"/"${ar[i]}"."$pakname"
 							#\cp -pv "$idir"/x64/"${ar[i]}" "$dll64_path"
-							ln -sT "$idir"/x64/"${ar[i]}" "$dll64_path"
+							ln -s "$idir"/x64/"${ar[i]}" "$dll64_path"
 							dll="$( echo "${ar[i]}" | sed -En 's/\.[dD][lL][lL]$//gp' )"
 							echo "\"*$dll\"=\"native\"" >> "$swh_tempdir"/override-dll.reg
 						done
